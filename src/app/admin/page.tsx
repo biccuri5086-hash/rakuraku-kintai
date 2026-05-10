@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
-import { RefreshCw, Users, Clock, AlertCircle } from "lucide-react";
+import { RefreshCw, Users, Clock, AlertCircle, LogOut } from "lucide-react";
 
 type AttendanceRow = {
   id: string;
@@ -50,12 +51,28 @@ function calcWorkHours(clockIn: string | null, clockOut: string | null): string 
 }
 
 export default function AdminPage() {
+  const router = useRouter();
+  const [authed, setAuthed] = useState(false);
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  useEffect(() => {
+    if (sessionStorage.getItem("admin_auth") !== "1") {
+      router.replace("/admin/login");
+    } else {
+      setAuthed(true);
+    }
+  }, [router]);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("admin_auth");
+    router.replace("/admin/login");
+  };
+
   const fetchData = useCallback(async () => {
+    if (!authed) return;
     setLoading(true);
     const supabase = getSupabase();
 
@@ -115,13 +132,21 @@ export default function AdminPage() {
           <h1 className="text-lg font-bold">ラクラク勤怠</h1>
           <p className="text-xs text-green-100">管理者ダッシュボード</p>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
-        >
-          <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+          >
+            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+          </button>
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">

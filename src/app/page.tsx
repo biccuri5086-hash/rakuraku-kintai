@@ -37,6 +37,7 @@ export default function HomePage() {
   const [profileChecked, setProfileChecked] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "done">("idle");
   const [tapped, setTapped] = useState(false);
+  const [clockInDone, setClockInDone] = useState(false);
 
   // 時計
   useEffect(() => {
@@ -92,14 +93,16 @@ export default function HomePage() {
       .single();
 
     if (!error && data) {
-      // GPS取得を非同期でバックグラウンド実行（UIをブロックしない）
       if (type === "clock_in") {
         setGpsStatus("acquiring");
         updateAttendanceGps(data.id);
         setTimeout(() => setGpsStatus("done"), 8000);
+        // 出勤完了画面を1.8秒表示してからコンディション報告へ
+        setClockInDone(true);
+        setTimeout(() => router.push("/condition"), 1800);
+      } else {
+        setTapped((v) => !v);
       }
-      setTapped((v) => !v);
-      if (type === "clock_in") router.push("/condition");
     }
     setLoading(false);
   };
@@ -112,6 +115,16 @@ export default function HomePage() {
       <div className="flex flex-col items-center justify-center min-h-screen gap-3">
         <div className="w-8 h-8 border-4 border-[#06C755] border-t-transparent rounded-full animate-spin" />
         <p className="text-gray-400 text-sm">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (clockInDone) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-[#06C755]">
+        <CheckCircle size={72} className="text-white animate-bounce" />
+        <p className="text-white text-2xl font-bold">出勤しました！</p>
+        <p className="text-green-100 text-sm">コンディションを教えてください...</p>
       </div>
     );
   }
