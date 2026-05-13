@@ -4,27 +4,33 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, AlertCircle } from "lucide-react";
 
-const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "rakuraku-admin";
-
 export default function AdminLoginPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!password || loading) return;
     setLoading(true);
-    setTimeout(() => {
-      if (password === ADMIN_PASSWORD) {
-        sessionStorage.setItem("admin_auth", "1");
-        router.replace("/admin");
-      } else {
-        setError(true);
-        setPassword("");
-        setLoading(false);
-      }
-    }, 500);
+    setError("");
+
+    const res = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      sessionStorage.setItem("admin_auth", "1");
+      router.replace("/admin");
+    } else {
+      setError(data.message ?? "パスワードが違います");
+      setPassword("");
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,7 +48,7 @@ export default function AdminLoginPage() {
           <input
             type="password"
             value={password}
-            onChange={(e) => { setPassword(e.target.value); setError(false); }}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }}
             onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             placeholder="パスワードを入力"
             autoFocus
@@ -51,7 +57,7 @@ export default function AdminLoginPage() {
           {error && (
             <div className="flex items-center gap-1.5 text-red-500 text-sm">
               <AlertCircle size={14} />
-              <span>パスワードが違います</span>
+              <span>{error}</span>
             </div>
           )}
           <button
