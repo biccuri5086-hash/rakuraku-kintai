@@ -24,7 +24,6 @@ export default function AdminLoginPage() {
     const data = await res.json();
 
     if (data.ok) {
-      sessionStorage.setItem("admin_auth", "1");
       router.replace("/admin");
     } else {
       setError(data.message ?? "パスワードが違います");

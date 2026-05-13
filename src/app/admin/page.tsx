@@ -59,20 +59,30 @@ export default function AdminPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
-    if (sessionStorage.getItem("admin_auth") !== "1") {
-      router.replace("/admin/login");
-    } else {
-      setAuthed(true);
-    }
+    let cancelled = false;
+    fetch("/api/admin/me", { cache: "no-store" })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          setAuthed(true);
+        } else {
+          router.replace("/admin/login");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) router.replace("/admin/login");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  const handleLogout = () => {
-    sessionStorage.removeItem("admin_auth");
+  const handleLogout = async () => {
+    await fetch("/api/admin/logout", { method: "POST" });
     router.replace("/admin/login");
   };
 
   const fetchData = useCallback(async () => {
-    if (!authed) return;
     setLoading(true);
     const supabase = getSupabase();
 
@@ -119,10 +129,21 @@ export default function AdminPage() {
     setLoading(false);
   }, [date]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (authed) fetchData();
+  }, [authed, fetchData]);
 
   const presentCount = users.filter((u) => u.clockIn).length;
   const alertCount = users.filter((u) => u.condition && u.condition.score <= 2).length;
+
+  if (!authed) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3">
+        <div className="w-8 h-8 border-4 border-[#06C755] border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-400 text-sm">権限確認中...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

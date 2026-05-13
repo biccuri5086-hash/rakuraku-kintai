@@ -141,19 +141,20 @@ export default function HomePage() {
         <CheckCircle size={72} className="text-white animate-bounce" />
         <p className="text-white text-2xl font-bold">出勤しました！</p>
         <p className="text-green-100 text-sm">コンディションを教えてください...</p>
-        {/* PoC デバッグ表示 */}
-        <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white text-xs rounded-lg p-3 font-mono">
-          <p className="text-yellow-300 font-bold mb-1">[DEBUG] GPS確認</p>
-          {gpsDebug ? (
-            <>
-              <p>📍 緯度: {gpsDebug.lat.toFixed(6)}</p>
-              <p>📍 経度: {gpsDebug.lng.toFixed(6)}</p>
-              <p>🎯 精度: ±{Math.round(gpsDebug.accuracy)}m</p>
-            </>
-          ) : (
-            <p className="text-gray-300">GPS取得中...</p>
-          )}
-        </div>
+        {process.env.NEXT_PUBLIC_DEBUG === "true" && (
+          <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white text-xs rounded-lg p-3 font-mono">
+            <p className="text-yellow-300 font-bold mb-1">[DEBUG] GPS確認</p>
+            {gpsDebug ? (
+              <>
+                <p>📍 緯度: {gpsDebug.lat.toFixed(6)}</p>
+                <p>📍 経度: {gpsDebug.lng.toFixed(6)}</p>
+                <p>🎯 精度: ±{Math.round(gpsDebug.accuracy)}m</p>
+              </>
+            ) : (
+              <p className="text-gray-300">GPS取得中...</p>
+            )}
+          </div>
+        )}
       </div>
     );
   }
