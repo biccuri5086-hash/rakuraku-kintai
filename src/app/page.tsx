@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useLiff } from "@/components/LiffProvider";
-import { getSupabase, getUserProfile, updateAttendanceGps } from "@/lib/supabase";
 import { Clock, LogIn, LogOut, CheckCircle, User, MapPin } from "lucide-react";
 import { Footer } from "@/components/Footer";
 
@@ -30,7 +29,7 @@ function formatDate(date: Date) {
 }
 
 export default function HomePage() {
-  const { isReady, profile } = useLiff();
+  const { isReady, profile, authedFetch } = useLiff();
   const router = useRouter();
   const [now, setNow] = useState(new Date());
   const [todayRecord, setTodayRecord] = useState<TodayRecord>({ clockIn: null, clockOut: null });
@@ -41,79 +40,69 @@ export default function HomePage() {
   const [clockInDone, setClockInDone] = useState(false);
   const [gpsDebug, setGpsDebug] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
 
-  // 時計
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // 初期登録チェック
   useEffect(() => {
     if (!isReady || !profile) return;
-    getUserProfile(profile.userId).then((p) => {
-      if (!p || !p.phone) {
-        router.replace("/register");
-      } else {
-        setProfileChecked(true);
-      }
-    });
-  }, [isReady, profile, router]);
+    authedFetch("/api/me/profile", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok || !data.profile?.phone) {
+          router.replace("/register");
+        } else {
+          setProfileChecked(true);
+        }
+      })
+      .catch(() => router.replace("/register"));
+  }, [isReady, profile, router, authedFetch]);
 
-  // 今日の打刻取得
   useEffect(() => {
     if (!profile || !profileChecked) return;
-    const today = new Date().toISOString().split("T")[0];
-    getSupabase()
-      .from("attendance")
-      .select("*")
-      .eq("user_id", profile.userId)
-      .gte("timestamp", `${today}T00:00:00`)
-      .order("timestamp", { ascending: true })
-      .then(({ data }) => {
-        if (data) {
-          const ci = data.find((r) => r.type === "clock_in");
-          const co = data.find((r) => r.type === "clock_out");
-          setTodayRecord({ clockIn: ci?.timestamp ?? null, clockOut: co?.timestamp ?? null });
+    authedFetch("/api/me/today", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) {
+          setTodayRecord({ clockIn: data.clockIn, clockOut: data.clockOut });
         }
       });
-  }, [profile, profileChecked, tapped]);
+  }, [profile, profileChecked, tapped, authedFetch]);
 
   const handleClock = async () => {
     if (!profile || loading) return;
     const type = todayRecord.clockIn && !todayRecord.clockOut ? "clock_out" : "clock_in";
     setLoading(true);
 
-    const { data, error } = await getSupabase()
-      .from("attendance")
-      .insert({
-        user_id: profile.userId,
-        user_name: profile.displayName,
-        type,
-        timestamp: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
+    const res = await authedFetch("/api/me/clock", {
+      method: "POST",
+      body: JSON.stringify({ type }),
+    });
+    const data = await res.json();
 
-    if (!error && data) {
+    if (data.ok) {
       if (type === "clock_in") {
         setGpsStatus("acquiring");
-        // GPSを取得しデバッグ表示にも反映
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
-              setGpsDebug({
+              const gps = {
                 lat: pos.coords.latitude,
                 lng: pos.coords.longitude,
                 accuracy: pos.coords.accuracy,
-              });
+              };
+              setGpsDebug(gps);
               setGpsStatus("done");
-              updateAttendanceGps(data.id);
+              authedFetch("/api/me/gps", {
+                method: "POST",
+                body: JSON.stringify({ attendanceId: data.attendanceId, ...gps }),
+              });
             },
             () => setGpsStatus("done"),
             { timeout: 10000, maximumAge: 0 }
           );
         }
-        // 出勤完了画面を3秒表示してからコンディション報告へ
         setClockInDone(true);
         setTimeout(() => router.push("/condition"), 3000);
       } else {
@@ -161,7 +150,6 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col min-h-screen max-w-md mx-auto">
-      {/* ヘッダー */}
       <header className="bg-[#06C755] text-white px-4 py-3 flex items-center justify-between shadow-md">
         <h1 className="text-lg font-bold tracking-wide">ラクラク勤怠</h1>
         <div className="flex items-center gap-2">
@@ -183,7 +171,6 @@ export default function HomePage() {
       </header>
 
       <main className="flex flex-col flex-1 px-4 py-6 gap-5">
-        {/* 日付・時刻 */}
         <div className="bg-white rounded-2xl shadow p-4 text-center">
           <p className="text-gray-500 text-sm">{formatDate(now)}</p>
           <p className="text-4xl font-bold text-gray-800 tabular-nums mt-1">
@@ -191,7 +178,6 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* ステータスカード */}
         <div className="bg-white rounded-2xl shadow p-4">
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">本日の状況</h2>
           <div className="flex items-center gap-2 mb-3">
@@ -231,7 +217,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 打刻ボタン */}
         {!isDone && (
           <button
             onClick={handleClock}
@@ -251,7 +236,6 @@ export default function HomePage() {
           </button>
         )}
 
-        {/* コンディション報告リンク */}
         <button
           onClick={() => router.push("/condition")}
           className="bg-white border border-gray-200 rounded-2xl shadow p-4 text-center text-gray-600 font-medium hover:bg-gray-50 transition-colors"
@@ -259,7 +243,6 @@ export default function HomePage() {
           😊 コンディション報告
         </button>
 
-        {/* 管理者リンク */}
         <button
           onClick={() => router.push("/admin")}
           className="text-xs text-gray-300 hover:text-gray-400 text-center py-1 transition-colors"

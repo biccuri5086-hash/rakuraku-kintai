@@ -2,16 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase";
 import { RefreshCw, Users, Clock, AlertCircle, LogOut } from "lucide-react";
-
-type AttendanceRow = {
-  id: string;
-  user_id: string;
-  user_name: string;
-  type: "clock_in" | "clock_out";
-  timestamp: string;
-};
 
 type ConditionRow = {
   id: string;
@@ -84,50 +75,16 @@ export default function AdminPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const supabase = getSupabase();
-
-    const [{ data: attendance }, { data: conditions }] = await Promise.all([
-      supabase
-        .from("attendance")
-        .select("*")
-        .gte("timestamp", `${date}T00:00:00`)
-        .lte("timestamp", `${date}T23:59:59`)
-        .order("timestamp", { ascending: true }),
-      supabase
-        .from("condition_reports")
-        .select("*")
-        .gte("reported_at", `${date}T00:00:00`)
-        .lte("reported_at", `${date}T23:59:59`)
-        .order("reported_at", { ascending: false }),
-    ]);
-
-    // ユーザーごとに集計
-    const userMap = new Map<string, UserSummary>();
-    for (const row of (attendance as AttendanceRow[]) ?? []) {
-      if (!userMap.has(row.user_id)) {
-        userMap.set(row.user_id, {
-          user_id: row.user_id,
-          user_name: row.user_name,
-          clockIn: null,
-          clockOut: null,
-          condition: null,
-        });
-      }
-      const u = userMap.get(row.user_id)!;
-      if (row.type === "clock_in" && !u.clockIn) u.clockIn = row.timestamp;
-      if (row.type === "clock_out") u.clockOut = row.timestamp;
+    const res = await fetch(`/api/admin/dashboard?date=${date}`, { cache: "no-store" });
+    if (res.status === 401) {
+      router.replace("/admin/login");
+      return;
     }
-
-    // コンディション紐付け（最新1件）
-    for (const c of (conditions as ConditionRow[]) ?? []) {
-      const u = userMap.get(c.user_id);
-      if (u && !u.condition) u.condition = c;
-    }
-
-    setUsers(Array.from(userMap.values()));
+    const data = await res.json();
+    setUsers(data.ok ? data.users : []);
     setLastUpdated(new Date());
     setLoading(false);
-  }, [date]);
+  }, [date, router]);
 
   useEffect(() => {
     if (authed) fetchData();
@@ -147,7 +104,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
       <header className="bg-[#06C755] text-white px-4 py-3 flex items-center justify-between shadow-md">
         <div>
           <h1 className="text-lg font-bold">ラクラク勤怠</h1>
@@ -171,7 +127,6 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-        {/* 日付選択 */}
         <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
           <label className="text-sm font-semibold text-gray-500">表示日付</label>
           <input
@@ -187,7 +142,6 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* サマリーカード */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-2xl shadow p-4 text-center">
             <Users size={20} className="text-[#06C755] mx-auto mb-1" />
@@ -206,7 +160,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* スタッフ一覧 */}
         <div className="bg-white rounded-2xl shadow overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100">
             <h2 className="font-bold text-gray-700">スタッフ一覧</h2>

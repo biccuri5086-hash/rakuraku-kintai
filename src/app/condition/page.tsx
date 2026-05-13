@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/LiffProvider";
-import { supabase } from "@/lib/supabase";
 import { ArrowLeft, Send, CheckCircle } from "lucide-react";
 
 const CONDITIONS = [
@@ -15,7 +14,7 @@ const CONDITIONS = [
 ] as const;
 
 export default function ConditionPage() {
-  const { profile } = useLiff();
+  const { profile, authedFetch } = useLiff();
   const router = useRouter();
   const [selected, setSelected] = useState<number | null>(null);
   const [comment, setComment] = useState("");
@@ -26,14 +25,13 @@ export default function ConditionPage() {
     if (!profile || selected === null || loading) return;
     setLoading(true);
 
-    const { error } = await supabase.from("condition_reports").insert({
-      user_id: profile.userId,
-      score: selected,
-      comment: comment.trim() || null,
-      reported_at: new Date().toISOString(),
+    const res = await authedFetch("/api/me/condition", {
+      method: "POST",
+      body: JSON.stringify({ score: selected, comment }),
     });
+    const data = await res.json();
 
-    if (!error) {
+    if (data.ok) {
       setSubmitted(true);
     }
     setLoading(false);

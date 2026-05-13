@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 type LiffProfile = {
   userId: string;
@@ -12,12 +12,14 @@ type LiffContextValue = {
   isReady: boolean;
   isInClient: boolean;
   profile: LiffProfile | null;
+  authedFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 };
 
 const LiffContext = createContext<LiffContextValue>({
   isReady: false,
   isInClient: false,
   profile: null,
+  authedFetch: () => Promise.reject(new Error("LIFF not initialized")),
 });
 
 export function useLiff() {
@@ -34,6 +36,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [isInClient, setIsInClient] = useState(false);
   const [profile, setProfile] = useState<LiffProfile | null>(null);
+  const tokenGetter = useRef<() => string | null>(() => null);
 
   useEffect(() => {
     const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
@@ -51,6 +54,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
         .then(() => {
           setIsInClient(liff.isInClient());
           if (liff.isLoggedIn()) {
+            tokenGetter.current = () => liff.getAccessToken();
             return liff.getProfile().then((p) => {
               setProfile({
                 userId: p.userId,
@@ -64,15 +68,24 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
           }
         })
         .catch(() => {
-          // LIFF初期化失敗時はデモモードで継続
           setProfile(DEMO_PROFILE);
           setIsReady(true);
         });
     });
   }, []);
 
+  const authedFetch: LiffContextValue["authedFetch"] = (input, init = {}) => {
+    const token = tokenGetter.current();
+    const headers = new Headers(init.headers);
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (!headers.has("Content-Type") && init.body && typeof init.body === "string") {
+      headers.set("Content-Type", "application/json");
+    }
+    return fetch(input, { ...init, headers });
+  };
+
   return (
-    <LiffContext.Provider value={{ isReady, isInClient, profile }}>
+    <LiffContext.Provider value={{ isReady, isInClient, profile, authedFetch }}>
       {children}
     </LiffContext.Provider>
   );

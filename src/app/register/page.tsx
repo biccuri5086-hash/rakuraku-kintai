@@ -3,12 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/LiffProvider";
-import { getSupabase, normalizePhone } from "@/lib/supabase";
 import { Phone, CheckCircle, AlertCircle, MapPin } from "lucide-react";
 import { Footer } from "@/components/Footer";
 
 export default function RegisterPage() {
-  const { profile } = useLiff();
+  const { profile, authedFetch } = useLiff();
   const router = useRouter();
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
@@ -19,29 +18,21 @@ export default function RegisterPage() {
   const handleSubmit = async () => {
     if (!profile || loading) return;
     setError("");
-
-    const phone = normalizePhone(input);
-    if (!phone) {
-      setError("正しい電話番号を入力してください（例：09012345678）");
-      return;
-    }
-
     setLoading(true);
-    const { error: dbError } = await getSupabase()
-      .from("user_profiles")
-      .upsert({
-        user_id: profile.userId,
-        display_name: profile.displayName,
-        phone,
-      });
 
-    if (dbError) {
-      setError("登録に失敗しました。もう一度お試しください。");
+    const res = await authedFetch("/api/me/register", {
+      method: "POST",
+      body: JSON.stringify({ phone: input }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      setError(data.message ?? "登録に失敗しました");
       setLoading(false);
       return;
     }
 
-    setDebugInfo({ phone, uid: profile.userId });
+    setDebugInfo({ phone: data.phone, uid: profile.userId });
     setDone(true);
     setTimeout(() => router.push("/"), 3000);
   };
@@ -65,14 +56,12 @@ export default function RegisterPage() {
 
   return (
     <div className="flex flex-col min-h-screen max-w-md mx-auto">
-      {/* ヘッダー */}
       <header className="bg-[#06C755] text-white px-4 py-3 shadow-md">
         <h1 className="text-lg font-bold">ラクラク勤怠</h1>
         <p className="text-xs text-green-100">初期設定</p>
       </header>
 
       <main className="flex flex-col flex-1 px-6 py-8 gap-6">
-        {/* 説明 */}
         <div className="text-center">
           <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <Phone size={28} className="text-[#06C755]" />
@@ -84,7 +73,6 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        {/* 入力フォーム */}
         <div className="flex flex-col gap-2">
           <label className="text-sm font-semibold text-gray-600">
             携帯電話番号
@@ -112,7 +100,6 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        {/* GPS同意 */}
         <div className="bg-blue-50 rounded-xl p-3 flex gap-2 items-start border border-blue-100">
           <MapPin size={16} className="text-blue-400 mt-0.5 shrink-0" />
           <p className="text-xs text-blue-600 leading-relaxed">
@@ -122,7 +109,6 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        {/* 登録ボタン */}
         <button
           onClick={handleSubmit}
           disabled={!input || loading}
