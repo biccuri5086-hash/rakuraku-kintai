@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useLiff } from "@/components/LiffProvider";
 import { getSupabase, getUserProfile, updateAttendanceGps } from "@/lib/supabase";
 import { Clock, LogIn, LogOut, CheckCircle, User, MapPin } from "lucide-react";
+import { Footer } from "@/components/Footer";
 
 type TodayRecord = {
   clockIn: string | null;
@@ -265,6 +266,7 @@ export default function HomePage() {
           管理者ダッシュボード →
         </button>
       </main>
+      <Footer />
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/LiffProvider";
 import { getSupabase, normalizePhone } from "@/lib/supabase";
-import { Phone, CheckCircle, AlertCircle } from "lucide-react";
+import { Phone, CheckCircle, AlertCircle, MapPin } from "lucide-react";
+import { Footer } from "@/components/Footer";
 
 export default function RegisterPage() {
   const { profile } = useLiff();
@@ -112,6 +113,16 @@ export default function RegisterPage() {
           </p>
         </div>
 
+        {/* GPS同意 */}
+        <div className="bg-blue-50 rounded-xl p-3 flex gap-2 items-start border border-blue-100">
+          <MapPin size={16} className="text-blue-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-blue-600 leading-relaxed">
+            打刻時に位置情報（GPS）を取得する場合があります。これは勤怠確認のためのみ使用され、
+            ブラウザの許可設定でいつでも無効にできます。
+            詳しくは<a href="/privacy" className="underline">プライバシーポリシー</a>をご確認ください。
+          </p>
+        </div>
+
         {/* 登録ボタン */}
         <button
           onClick={handleSubmit}
@@ -124,10 +135,11 @@ export default function RegisterPage() {
               登録中...
             </div>
           ) : (
-            "登録して始める"
+            "同意して登録する"
           )}
         </button>
       </main>
+      <Footer />
     </div>
   );
 }
