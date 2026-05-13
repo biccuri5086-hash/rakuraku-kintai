@@ -38,6 +38,7 @@ export default function HomePage() {
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "done">("idle");
   const [tapped, setTapped] = useState(false);
   const [clockInDone, setClockInDone] = useState(false);
+  const [gpsDebug, setGpsDebug] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
 
   // 時計
   useEffect(() => {
@@ -95,11 +96,25 @@ export default function HomePage() {
     if (!error && data) {
       if (type === "clock_in") {
         setGpsStatus("acquiring");
-        updateAttendanceGps(data.id);
-        setTimeout(() => setGpsStatus("done"), 8000);
-        // 出勤完了画面を1.8秒表示してからコンディション報告へ
+        // GPSを取得しデバッグ表示にも反映
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              setGpsDebug({
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+              });
+              setGpsStatus("done");
+              updateAttendanceGps(data.id);
+            },
+            () => setGpsStatus("done"),
+            { timeout: 10000, maximumAge: 0 }
+          );
+        }
+        // 出勤完了画面を3秒表示してからコンディション報告へ
         setClockInDone(true);
-        setTimeout(() => router.push("/condition"), 1800);
+        setTimeout(() => router.push("/condition"), 3000);
       } else {
         setTapped((v) => !v);
       }
@@ -121,10 +136,23 @@ export default function HomePage() {
 
   if (clockInDone) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-[#06C755]">
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-[#06C755] relative">
         <CheckCircle size={72} className="text-white animate-bounce" />
         <p className="text-white text-2xl font-bold">出勤しました！</p>
         <p className="text-green-100 text-sm">コンディションを教えてください...</p>
+        {/* PoC デバッグ表示 */}
+        <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white text-xs rounded-lg p-3 font-mono">
+          <p className="text-yellow-300 font-bold mb-1">[DEBUG] GPS確認</p>
+          {gpsDebug ? (
+            <>
+              <p>📍 緯度: {gpsDebug.lat.toFixed(6)}</p>
+              <p>📍 経度: {gpsDebug.lng.toFixed(6)}</p>
+              <p>🎯 精度: ±{Math.round(gpsDebug.accuracy)}m</p>
+            </>
+          ) : (
+            <p className="text-gray-300">GPS取得中...</p>
+          )}
+        </div>
       </div>
     );
   }

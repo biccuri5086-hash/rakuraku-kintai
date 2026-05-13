@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<{ phone: string; uid: string } | null>(null);
 
   const handleSubmit = async () => {
     if (!profile || loading) return;
@@ -39,16 +40,25 @@ export default function RegisterPage() {
       return;
     }
 
+    setDebugInfo({ phone, uid: profile.userId });
     setDone(true);
-    setTimeout(() => router.push("/"), 1500);
+    setTimeout(() => router.push("/"), 3000);
   };
 
   if (done) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-6">
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-6 relative">
         <CheckCircle size={56} className="text-[#06C755]" />
         <h2 className="text-xl font-bold text-gray-800">登録完了！</h2>
         <p className="text-gray-400 text-sm">ホーム画面に移動します...</p>
+        {/* PoC デバッグ表示 */}
+        {debugInfo && (
+          <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white text-xs rounded-lg p-3 font-mono">
+            <p className="text-yellow-300 font-bold mb-1">[DEBUG] 登録確認</p>
+            <p>📱 正規化済み電話番号: {debugInfo.phone}</p>
+            <p>🔑 LINE UID: {debugInfo.uid}</p>
+          </div>
+        )}
       </div>
     );
   }
