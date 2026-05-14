@@ -90,6 +90,8 @@ export default function RegisterPage() {
             <p>isInClient: {String(isInClient)}</p>
             <p>isDemoMode: {String(isDemoMode)}</p>
             <p>userId: {profile?.userId ?? "(なし)"}</p>
+            <p className="break-all">LIFF_ID env: [{process.env.NEXT_PUBLIC_LIFF_ID ?? "(未設定)"}]</p>
+            <p>LIFF_ID 文字数: {(process.env.NEXT_PUBLIC_LIFF_ID ?? "").length}</p>
             {initError && <p className="text-red-600 break-all">initError: {initError}</p>}
           </div>
           <button
