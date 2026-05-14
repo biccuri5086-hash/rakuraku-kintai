@@ -20,10 +20,12 @@ export default function RegisterPage() {
     setDiagResult("テスト中...");
     try {
       const res = await authedFetch("/api/me/profile", { cache: "no-store" });
-      const data = await res.json();
-      setDiagResult(`HTTP ${res.status}\n${JSON.stringify(data, null, 2)}`);
+      const text = await res.text();
+      let pretty = text;
+      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch { /* keep raw */ }
+      setDiagResult(`HTTP ${res.status}\n${pretty.slice(0, 800)}`);
     } catch (e) {
-      setDiagResult("通信エラー: " + (e instanceof Error ? e.message : String(e)));
+      setDiagResult("通信エラー: " + (e instanceof Error ? `${e.name}: ${e.message}` : String(e)));
     }
   };
 
