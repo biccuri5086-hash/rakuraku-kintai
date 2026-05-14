@@ -46,3 +46,19 @@ export async function requireLineUser(req: NextRequest): Promise<LineUser | null
   if (!token) return null;
   return verifyAccessToken(token);
 }
+
+export type AuthError = "NO_TOKEN" | "INVALID_TOKEN";
+
+export async function requireLineUserDetailed(
+  req: NextRequest
+): Promise<{ user: LineUser } | { user: null; error: AuthError }> {
+  const auth = req.headers.get("authorization");
+  if (!auth || !auth.toLowerCase().startsWith("bearer ")) {
+    return { user: null, error: "NO_TOKEN" };
+  }
+  const token = auth.slice(7).trim();
+  if (!token) return { user: null, error: "NO_TOKEN" };
+  const user = await verifyAccessToken(token);
+  if (!user) return { user: null, error: "INVALID_TOKEN" };
+  return { user };
+}

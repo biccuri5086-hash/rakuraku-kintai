@@ -11,6 +11,8 @@ type LiffProfile = {
 type LiffContextValue = {
   isReady: boolean;
   isInClient: boolean;
+  isDemoMode: boolean;
+  initError: string | null;
   profile: LiffProfile | null;
   authedFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 };
@@ -18,6 +20,8 @@ type LiffContextValue = {
 const LiffContext = createContext<LiffContextValue>({
   isReady: false,
   isInClient: false,
+  isDemoMode: false,
+  initError: null,
   profile: null,
   authedFetch: () => Promise.reject(new Error("LIFF not initialized")),
 });
@@ -35,6 +39,8 @@ const DEMO_PROFILE: LiffProfile = {
 export function LiffProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [isInClient, setIsInClient] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const [profile, setProfile] = useState<LiffProfile | null>(null);
   const tokenGetter = useRef<() => string | null>(() => null);
 
@@ -44,6 +50,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
     if (!liffId || liffId === "YOUR_LIFF_ID_HERE") {
       setProfile(DEMO_PROFILE);
       setIsInClient(false);
+      setIsDemoMode(true);
       setIsReady(true);
       return;
     }
@@ -67,8 +74,11 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
             liff.login();
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          setInitError(msg);
           setProfile(DEMO_PROFILE);
+          setIsDemoMode(true);
           setIsReady(true);
         });
     });
@@ -85,7 +95,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <LiffContext.Provider value={{ isReady, isInClient, profile, authedFetch }}>
+    <LiffContext.Provider value={{ isReady, isInClient, isDemoMode, initError, profile, authedFetch }}>
       {children}
     </LiffContext.Provider>
   );
