@@ -35,11 +35,11 @@ export async function POST(req: NextRequest) {
 
     const { data: dup } = await supabase
       .from("user_profiles")
-      .select("user_id")
+      .select("user_id, role")
       .eq("phone", phone)
       .neq("user_id", user.userId)
       .maybeSingle();
-    if (dup) {
+    if (dup && dup.role !== "admin") {
       return NextResponse.json(
         { ok: false, message: "この電話番号は既に他のアカウントで登録されています。担当者にお問い合わせください。" },
         { status: 409 }

@@ -71,29 +71,57 @@ where role = 'admin';
 
 
 -- ============================================================
--- STEP 4：電話番号にユニーク制約を追加
+-- STEP 4：（削除）電話番号ユニーク制約はDB側では設けません
 -- ============================================================
--- 同じ電話番号で複数アカウント登録できないようにします。
--- ※ STEP 2 で重複が見つかった場合、STEP 5 で削除してからこのSTEPを実行してください
--- ※ 重複が残っているとこのSTEPは失敗します
+-- オーナー様は管理者として複数アカウントを使えるようにしておくため、
+-- DB側でのユニーク制約は設けません。
+-- 代わりに登録API（/api/me/register）が以下のルールで動作：
+--   ・既存アカウントが admin → 登録許可
+--   ・既存アカウントが staff → 登録拒否
+-- これで「staff の二重登録」だけ防ぎ「admin の複数アカウント」は許可されます。
 
+-- 既に追加してしまった場合は以下で削除
 alter table user_profiles
   drop constraint if exists user_profiles_phone_unique;
 
-alter table user_profiles
-  add constraint user_profiles_phone_unique unique (phone);
-
 
 -- ============================================================
--- STEP 5：重複アカウント削除（STEP 2 で重複が見つかった場合のみ実行）
+-- STEP 5：重複アカウントの統合（STEP 2 で重複が見つかった場合のみ実行）
 -- ============================================================
--- ↓↓↓ 削除したい方のUIDを書き換えて実行してください ↓↓↓
--- ※ どちらが「正しいアカウント」か慎重に判断してください
--- ※ 重複がなければこのSTEPはスキップ
+-- 古いアカウントのデータ（打刻・コンディション報告）を
+-- 新しいアカウントに引き継いでから、古いアカウントを削除します。
+-- 詳細スクリプト：specs/SUPABASE_MERGE_DUPLICATE.sql 参照
 
--- delete from user_profiles where user_id = 'U_削除したい方のUID';
+-- target_phone を重複している電話番号に書き換えて実行
+do $$
+declare
+    target_phone text := '08098957770';  -- ← 重複している電話番号に書き換え
+    old_uid text;
+    new_uid text;
+    attendance_count int;
+    condition_count int;
+begin
+    select user_id into old_uid
+    from user_profiles where phone = target_phone
+    order by created_at asc nulls last limit 1;
 
--- 削除後、STEP 4 のユニーク制約追加を再度実行してください
+    select user_id into new_uid
+    from user_profiles where phone = target_phone
+    order by created_at desc nulls last limit 1;
+
+    if old_uid is null or old_uid = new_uid then
+        raise notice '重複なし、または対象なし';
+        return;
+    end if;
+
+    raise notice '統合: old=% → new=%', old_uid, new_uid;
+    update attendance set user_id = new_uid where user_id = old_uid;
+    get diagnostics attendance_count = row_count;
+    update condition_reports set user_id = new_uid where user_id = old_uid;
+    get diagnostics condition_count = row_count;
+    delete from user_profiles where user_id = old_uid;
+    raise notice '完了：打刻 % 件, コンディション % 件 移行', attendance_count, condition_count;
+end $$;
 
 
 -- ============================================================
