@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { errorResponse } from "@/lib/api-handler";
 
 export async function POST(req: NextRequest) {
+  try {
   const user = await getLineUserCached(req);
   if (!user) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
 
@@ -32,4 +34,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, message: "送信に失敗しました" }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
+  } catch (e) {
+    return errorResponse(e);
+  }
 }
