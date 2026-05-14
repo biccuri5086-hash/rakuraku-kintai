@@ -46,7 +46,7 @@ export default function RegisterPage() {
 
     setDebugInfo({ phone: data.phone, uid: profile.userId });
     setDone(true);
-    setTimeout(() => router.push("/"), 3000);
+    setTimeout(() => router.push("/"), 1000);
   };
 
   if (done) {

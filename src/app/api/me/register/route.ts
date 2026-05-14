@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLineUserDetailed } from "@/lib/line-auth";
+import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { normalizePhone } from "@/lib/phone";
 
 export async function POST(req: NextRequest) {
-  const result = await requireLineUserDetailed(req);
-  if (!result.user) {
-    const message = result.error === "NO_TOKEN"
-      ? "LINEから開いてください（認証トークンがありません）"
-      : "LINEセッションが無効です。LINEから開き直してください";
-    return NextResponse.json({ ok: false, message, code: result.error }, { status: 401 });
+  const user = await getLineUserCached(req);
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, message: "LINEから開いてください（認証トークンがありません）" },
+      { status: 401 }
+    );
   }
-  const user = result.user;
 
   let body: { phone?: string };
   try {

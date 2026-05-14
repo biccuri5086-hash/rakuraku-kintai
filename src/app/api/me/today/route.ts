@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLineUser } from "@/lib/line-auth";
+import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(req: NextRequest) {
-  const user = await requireLineUser(req);
+  const user = await getLineUserCached(req);
   if (!user) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
 
   const today = new Date().toISOString().split("T")[0];
