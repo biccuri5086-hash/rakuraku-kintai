@@ -3,17 +3,29 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/LiffProvider";
-import { Phone, CheckCircle, AlertCircle, MapPin } from "lucide-react";
+import { Phone, CheckCircle, AlertCircle, AlertTriangle, MapPin } from "lucide-react";
 import { Footer } from "@/components/Footer";
 
 export default function RegisterPage() {
-  const { profile, authedFetch } = useLiff();
+  const { profile, authedFetch, isDemoMode, initError, isInClient } = useLiff();
   const router = useRouter();
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ phone: string; uid: string } | null>(null);
+  const [diagResult, setDiagResult] = useState<string | null>(null);
+
+  const handleDiag = async () => {
+    setDiagResult("テスト中...");
+    try {
+      const res = await authedFetch("/api/me/profile", { cache: "no-store" });
+      const data = await res.json();
+      setDiagResult(`HTTP ${res.status}\n${JSON.stringify(data, null, 2)}`);
+    } catch (e) {
+      setDiagResult("通信エラー: " + (e instanceof Error ? e.message : String(e)));
+    }
+  };
 
   const handleSubmit = async () => {
     if (!profile || loading) return;
@@ -62,6 +74,38 @@ export default function RegisterPage() {
       </header>
 
       <main className="flex flex-col flex-1 px-6 py-8 gap-6">
+        {/* 診断パネル */}
+        <div className={`rounded-2xl border p-4 ${isDemoMode ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"}`}>
+          <div className="flex items-center gap-2 mb-2">
+            {isDemoMode ? (
+              <AlertTriangle size={16} className="text-red-500" />
+            ) : (
+              <CheckCircle size={16} className="text-[#06C755]" />
+            )}
+            <p className={`text-xs font-bold ${isDemoMode ? "text-red-700" : "text-green-700"}`}>
+              {isDemoMode ? "⚠ LIFF認証が動いていません（デモモード）" : "LIFF認証 OK"}
+            </p>
+          </div>
+          <div className="text-[10px] font-mono text-gray-600 space-y-0.5">
+            <p>isInClient: {String(isInClient)}</p>
+            <p>isDemoMode: {String(isDemoMode)}</p>
+            <p>userId: {profile?.userId ?? "(なし)"}</p>
+            {initError && <p className="text-red-600 break-all">initError: {initError}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={handleDiag}
+            className="mt-2 text-[11px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold"
+          >
+            認証テスト実行
+          </button>
+          {diagResult && (
+            <pre className="mt-2 text-[10px] font-mono bg-white p-2 rounded border border-gray-200 whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+              {diagResult}
+            </pre>
+          )}
+        </div>
+
         <div className="text-center">
           <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <Phone size={28} className="text-[#06C755]" />
