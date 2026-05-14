@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let body: { phone?: string };
+    let body: { phone?: string; full_name?: string };
     try {
       body = await req.json();
     } catch {
@@ -26,11 +26,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "正しい電話番号を入力してください" }, { status: 400 });
     }
 
-    const { error } = await getSupabaseAdmin()
+    const fullName = (body.full_name ?? "").trim();
+    if (!fullName || fullName.length < 2 || fullName.length > 50) {
+      return NextResponse.json({ ok: false, message: "本名を2文字以上50文字以内で入力してください" }, { status: 400 });
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    const { data: dup } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .eq("phone", phone)
+      .neq("user_id", user.userId)
+      .maybeSingle();
+    if (dup) {
+      return NextResponse.json(
+        { ok: false, message: "この電話番号は既に他のアカウントで登録されています。担当者にお問い合わせください。" },
+        { status: 409 }
+      );
+    }
+
+    const { error } = await supabase
       .from("user_profiles")
       .upsert({
         user_id: user.userId,
         display_name: user.displayName,
+        full_name: fullName,
         phone,
       });
 

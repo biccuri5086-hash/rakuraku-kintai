@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifyToken } from "@/lib/admin-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { errorResponse } from "@/lib/api-handler";
 
 type AttendanceRow = {
   id: string;
@@ -22,12 +23,15 @@ type ConditionRow = {
 type UserSummary = {
   user_id: string;
   user_name: string;
+  full_name: string | null;
+  phone: string | null;
   clockIn: string | null;
   clockOut: string | null;
   condition: ConditionRow | null;
 };
 
 export async function GET(req: NextRequest) {
+  try {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!verifyToken(token)) {
@@ -40,7 +44,7 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin();
-  const [{ data: attendance }, { data: conditions }] = await Promise.all([
+  const [{ data: attendance }, { data: conditions }, { data: profiles }] = await Promise.all([
     supabase
       .from("attendance")
       .select("id, user_id, user_name, type, timestamp")
@@ -53,14 +57,25 @@ export async function GET(req: NextRequest) {
       .gte("reported_at", `${date}T00:00:00`)
       .lte("reported_at", `${date}T23:59:59`)
       .order("reported_at", { ascending: false }),
+    supabase
+      .from("user_profiles")
+      .select("user_id, display_name, full_name, phone"),
   ]);
+
+  const profileMap = new Map<string, { display_name: string; full_name: string | null; phone: string | null }>();
+  for (const p of (profiles ?? []) as { user_id: string; display_name: string; full_name: string | null; phone: string | null }[]) {
+    profileMap.set(p.user_id, { display_name: p.display_name, full_name: p.full_name, phone: p.phone });
+  }
 
   const userMap = new Map<string, UserSummary>();
   for (const row of (attendance as AttendanceRow[]) ?? []) {
     if (!userMap.has(row.user_id)) {
+      const prof = profileMap.get(row.user_id);
       userMap.set(row.user_id, {
         user_id: row.user_id,
         user_name: row.user_name,
+        full_name: prof?.full_name ?? null,
+        phone: prof?.phone ?? null,
         clockIn: null,
         clockOut: null,
         condition: null,
@@ -77,4 +92,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, users: Array.from(userMap.values()) });
+} catch (e) {
+    return errorResponse(e);
+  }
 }

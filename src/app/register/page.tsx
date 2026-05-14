@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/LiffProvider";
-import { Phone, CheckCircle, AlertCircle, AlertTriangle, MapPin } from "lucide-react";
+import { Phone, CheckCircle, AlertCircle, AlertTriangle, MapPin, User as UserIcon } from "lucide-react";
 import { Footer } from "@/components/Footer";
 
 export default function RegisterPage() {
   const { profile, authedFetch, isDemoMode, initError, isInClient } = useLiff();
   const router = useRouter();
   const [input, setInput] = useState("");
+  const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -36,7 +37,7 @@ export default function RegisterPage() {
 
     const res = await authedFetch("/api/me/register", {
       method: "POST",
-      body: JSON.stringify({ phone: input }),
+      body: JSON.stringify({ phone: input, full_name: fullName }),
     });
     const data = await res.json();
 
@@ -123,6 +124,30 @@ export default function RegisterPage() {
 
         <div className="flex flex-col gap-2">
           <label className="text-sm font-semibold text-gray-600">
+            お名前（本名）
+          </label>
+          <div className="relative">
+            <UserIcon size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                setError("");
+              }}
+              placeholder="例：山田 太郎"
+              maxLength={50}
+              className="w-full border-2 border-gray-200 rounded-xl pl-10 pr-4 py-3 text-lg focus:outline-none focus:border-[#06C755] text-gray-800 placeholder-gray-300"
+              autoFocus
+            />
+          </div>
+          <p className="text-xs text-gray-400">
+            給与計算・契約書類に使用される正式な氏名です
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-gray-600">
             携帯電話番号
           </label>
           <input
@@ -135,7 +160,6 @@ export default function RegisterPage() {
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             placeholder="例：090-1234-5678"
             className="border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:border-[#06C755] text-gray-800 placeholder-gray-300"
-            autoFocus
           />
           {error && (
             <div className="flex items-center gap-1.5 text-red-500 text-sm">
@@ -159,7 +183,7 @@ export default function RegisterPage() {
 
         <button
           onClick={handleSubmit}
-          disabled={!input || loading}
+          disabled={!input || !fullName.trim() || loading}
           className="bg-[#06C755] disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-2xl py-5 text-lg font-bold shadow-lg transition-all active:scale-95 mt-auto"
         >
           {loading ? (

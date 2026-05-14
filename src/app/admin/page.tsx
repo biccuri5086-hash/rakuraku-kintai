@@ -15,6 +15,8 @@ type ConditionRow = {
 type UserSummary = {
   user_id: string;
   user_name: string;
+  full_name: string | null;
+  phone: string | null;
   clockIn: string | null;
   clockOut: string | null;
   condition: ConditionRow | null;
@@ -192,10 +194,14 @@ export default function AdminPage() {
                     <tr key={u.user_id} className={isAlert ? "bg-red-50" : ""}>
                       <td className="px-4 py-3 font-medium text-gray-800">
                         {isAlert && <span className="text-red-500 mr-1">!</span>}
-                        {u.user_name}
+                        <span className="font-bold">{u.full_name ?? "（未設定）"}</span>
+                        <p className="text-xs text-gray-400 font-normal mt-0.5 truncate max-w-[140px]">
+                          LINE: {u.user_name}
+                          {u.phone && <span> ／ {u.phone}</span>}
+                        </p>
                         {u.condition?.comment && (
-                          <p className="text-xs text-gray-400 font-normal mt-0.5 truncate max-w-[120px]">
-                            {u.condition.comment}
+                          <p className="text-xs text-gray-500 font-normal mt-0.5 truncate max-w-[140px]">
+                            💬 {u.condition.comment}
                           </p>
                         )}
                       </td>
