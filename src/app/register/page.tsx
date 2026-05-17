@@ -3,32 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/LiffProvider";
-import { Phone, CheckCircle, AlertCircle, AlertTriangle, MapPin, User as UserIcon } from "lucide-react";
+import { Phone, CheckCircle, AlertCircle, MapPin, User as UserIcon } from "lucide-react";
 import { Footer } from "@/components/Footer";
 
 export default function RegisterPage() {
-  const { profile, authedFetch, isDemoMode, initError, isInClient } = useLiff();
+  const { profile, authedFetch } = useLiff();
   const router = useRouter();
   const [input, setInput] = useState("");
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<{ phone: string; uid: string } | null>(null);
-  const [diagResult, setDiagResult] = useState<string | null>(null);
-
-  const handleDiag = async () => {
-    setDiagResult("テスト中...");
-    try {
-      const res = await authedFetch("/api/me/profile", { cache: "no-store" });
-      const text = await res.text();
-      let pretty = text;
-      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch { /* keep raw */ }
-      setDiagResult(`HTTP ${res.status}\n${pretty.slice(0, 800)}`);
-    } catch (e) {
-      setDiagResult("通信エラー: " + (e instanceof Error ? `${e.name}: ${e.message}` : String(e)));
-    }
-  };
 
   const handleSubmit = async () => {
     if (!profile || loading) return;
@@ -47,24 +32,16 @@ export default function RegisterPage() {
       return;
     }
 
-    setDebugInfo({ phone: data.phone, uid: profile.userId });
     setDone(true);
     setTimeout(() => router.push("/"), 1000);
   };
 
   if (done) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-6 relative">
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-6">
         <CheckCircle size={56} className="text-[#06C755]" />
         <h2 className="text-xl font-bold text-gray-800">登録完了！</h2>
         <p className="text-gray-400 text-sm">ホーム画面に移動します...</p>
-        {process.env.NEXT_PUBLIC_DEBUG === "true" && debugInfo && (
-          <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white text-xs rounded-lg p-3 font-mono">
-            <p className="text-yellow-300 font-bold mb-1">[DEBUG] 登録確認</p>
-            <p>📱 正規化済み電話番号: {debugInfo.phone}</p>
-            <p>🔑 LINE UID: {debugInfo.uid}</p>
-          </div>
-        )}
       </div>
     );
   }
@@ -77,47 +54,13 @@ export default function RegisterPage() {
       </header>
 
       <main className="flex flex-col flex-1 px-6 py-8 gap-6">
-        {/* 診断パネル */}
-        <div className={`rounded-2xl border p-4 ${isDemoMode ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"}`}>
-          <div className="flex items-center gap-2 mb-2">
-            {isDemoMode ? (
-              <AlertTriangle size={16} className="text-red-500" />
-            ) : (
-              <CheckCircle size={16} className="text-[#06C755]" />
-            )}
-            <p className={`text-xs font-bold ${isDemoMode ? "text-red-700" : "text-green-700"}`}>
-              {isDemoMode ? "⚠ LIFF認証が動いていません（デモモード）" : "LIFF認証 OK"}
-            </p>
-          </div>
-          <div className="text-[10px] font-mono text-gray-600 space-y-0.5">
-            <p>isInClient: {String(isInClient)}</p>
-            <p>isDemoMode: {String(isDemoMode)}</p>
-            <p>userId: {profile?.userId ?? "(なし)"}</p>
-            <p className="break-all">LIFF_ID env: [{process.env.NEXT_PUBLIC_LIFF_ID ?? "(未設定)"}]</p>
-            <p>LIFF_ID 文字数: {(process.env.NEXT_PUBLIC_LIFF_ID ?? "").length}</p>
-            {initError && <p className="text-red-600 break-all">initError: {initError}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={handleDiag}
-            className="mt-2 text-[11px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold"
-          >
-            認証テスト実行
-          </button>
-          {diagResult && (
-            <pre className="mt-2 text-[10px] font-mono bg-white p-2 rounded border border-gray-200 whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
-              {diagResult}
-            </pre>
-          )}
-        </div>
-
         <div className="text-center">
           <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <Phone size={28} className="text-[#06C755]" />
           </div>
-          <h2 className="text-xl font-bold text-gray-800">電話番号を登録してください</h2>
+          <h2 className="text-xl font-bold text-gray-800">初回登録</h2>
           <p className="text-sm text-gray-500 mt-2 leading-relaxed">
-            本人確認のため、携帯電話番号を入力してください。
+            本人確認のため、お名前と携帯電話番号を入力してください。
             <br />入力は1回のみです。
           </p>
         </div>

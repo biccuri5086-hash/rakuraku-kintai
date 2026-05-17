@@ -38,7 +38,6 @@ export default function HomePage() {
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "done">("idle");
   const [tapped, setTapped] = useState(false);
   const [clockInDone, setClockInDone] = useState(false);
-  const [gpsDebug, setGpsDebug] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -92,7 +91,6 @@ export default function HomePage() {
                 lng: pos.coords.longitude,
                 accuracy: pos.coords.accuracy,
               };
-              setGpsDebug(gps);
               setGpsStatus("done");
               authedFetch("/api/me/gps", {
                 method: "POST",
@@ -126,24 +124,10 @@ export default function HomePage() {
 
   if (clockInDone) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-[#06C755] relative">
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-[#06C755]">
         <CheckCircle size={72} className="text-white animate-bounce" />
         <p className="text-white text-2xl font-bold">出勤しました！</p>
         <p className="text-green-100 text-sm">コンディションを教えてください...</p>
-        {process.env.NEXT_PUBLIC_DEBUG === "true" && (
-          <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white text-xs rounded-lg p-3 font-mono">
-            <p className="text-yellow-300 font-bold mb-1">[DEBUG] GPS確認</p>
-            {gpsDebug ? (
-              <>
-                <p>📍 緯度: {gpsDebug.lat.toFixed(6)}</p>
-                <p>📍 経度: {gpsDebug.lng.toFixed(6)}</p>
-                <p>🎯 精度: ±{Math.round(gpsDebug.accuracy)}m</p>
-              </>
-            ) : (
-              <p className="text-gray-300">GPS取得中...</p>
-            )}
-          </div>
-        )}
       </div>
     );
   }
