@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifyToken } from "@/lib/admin-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { errorResponse } from "@/lib/api-handler";
+import { logAudit } from "@/lib/audit-log";
 
 type AttendanceRow = {
   id: string;
@@ -42,6 +43,8 @@ export async function GET(req: NextRequest) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json({ ok: false, message: "日付形式が不正" }, { status: 400 });
   }
+
+  await logAudit(req, "admin_dashboard_view", { date });
 
   const supabase = getSupabaseAdmin();
   const [{ data: attendance }, { data: conditions }, { data: profiles }] = await Promise.all([

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Users, Clock, AlertCircle, LogOut } from "lucide-react";
+import { RefreshCw, Users, Clock, AlertCircle, LogOut, Shield, KeyRound } from "lucide-react";
 
 type ConditionRow = {
   id: string;
@@ -113,6 +113,20 @@ export default function AdminPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => router.push("/admin/audit")}
+            title="監査ログ"
+            className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+          >
+            <Shield size={18} />
+          </button>
+          <button
+            onClick={() => router.push("/admin/2fa-setup")}
+            title="2FA設定"
+            className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+          >
+            <KeyRound size={18} />
+          </button>
+          <button
             onClick={fetchData}
             disabled={loading}
             className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
@@ -121,6 +135,7 @@ export default function AdminPage() {
           </button>
           <button
             onClick={handleLogout}
+            title="ログアウト"
             className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
           >
             <LogOut size={18} />
