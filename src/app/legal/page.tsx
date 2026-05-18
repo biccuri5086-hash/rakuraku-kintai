@@ -5,16 +5,16 @@ export default function LegalPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <Link href="/" className="text-sm text-[#06C755] mb-4 inline-block">← ホームに戻る</Link>
       <h1 className="text-2xl font-bold text-gray-800 mb-2">特定商取引法に基づく表記</h1>
-      <p className="text-sm text-gray-400 mb-6">最終更新日：2026年5月13日</p>
+      <p className="text-sm text-gray-400 mb-6">最終更新日：2026年5月19日</p>
 
       <table className="w-full text-sm border-collapse">
         <tbody>
           {[
-            ["販売事業者名", "（事業者名を記入してください）"],
-            ["代表者名", "（代表者名を記入してください）"],
-            ["所在地", "（住所を記入してください）"],
-            ["電話番号", "（電話番号を記入してください）\n※お問い合わせはメールにてお願いします"],
-            ["メールアドレス", "（メールアドレスを記入してください）"],
+            ["販売事業者名", "小原 健太"],
+            ["代表者名", "小原 健太"],
+            ["所在地", "消費者からの請求があれば遅滞なく開示します"],
+            ["電話番号", "080-9895-7770\n※対応時間：平日 10:00-18:00（土日祝休）\n※お問い合わせは原則メールにてお願いします"],
+            ["メールアドレス", "biccuri5086@gmail.com"],
             ["サービス名", "ラクラク勤怠"],
             ["販売価格", "スタータープラン：150円/人/月\nスタンダードプラン：200円/人/月\n（税込・詳細は料金ページ参照）"],
             ["支払方法", "クレジットカード（VISA / Mastercard / JCB）\n銀行振込（別途ご案内）"],
@@ -30,6 +30,15 @@ export default function LegalPage() {
           ))}
         </tbody>
       </table>
+
+      <div className="mt-8 p-4 bg-gray-50 rounded-lg text-xs text-gray-500 leading-relaxed">
+        <p className="font-semibold mb-1">所在地の開示について</p>
+        <p>
+          消費者庁ガイドラインに基づき、個人事業主としての所在地は
+          消費者からの請求があった場合に遅滞なく開示いたします。
+          開示をご希望の場合は、上記メールアドレスまでご連絡ください。
+        </p>
+      </div>
     </div>
   );
 }
