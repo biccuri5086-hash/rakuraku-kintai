@@ -26,11 +26,22 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin();
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("company_id")
+    .eq("user_id", user.userId)
+    .maybeSingle();
+
+  if (!profile?.company_id) {
+    return NextResponse.json({ ok: false, message: "プロフィール未登録" }, { status: 400 });
+  }
+
   const { error } = await supabase
     .from("attendance")
     .update({ lat, lng, gps_accuracy: accuracy })
     .eq("id", attendanceId)
-    .eq("user_id", user.userId);
+    .eq("user_id", user.userId)
+    .eq("company_id", profile.company_id);
 
   if (error) {
     return NextResponse.json({ ok: false, message: "GPS更新に失敗" }, { status: 500 });

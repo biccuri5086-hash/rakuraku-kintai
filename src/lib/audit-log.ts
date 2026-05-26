@@ -8,7 +8,27 @@ export type AuditAction =
   | "admin_login_rate_limited"
   | "admin_logout"
   | "admin_dashboard_view"
-  | "admin_2fa_setup_view";
+  | "admin_2fa_setup_view"
+  | "super_login_success"
+  | "super_login_failure"
+  | "super_logout"
+  | "super_company_create"
+  | "super_company_update"
+  | "super_company_delete"
+  | "super_admin_create"
+  | "super_admin_delete"
+  | "tenant_violation_attempt"
+  | "staff_register"
+  | "staff_clock"
+  | "staff_condition";
+
+export type ActorType = "super_admin" | "admin" | "staff" | "system";
+
+export type AuditContext = {
+  actorType?: ActorType;
+  actorId?: string;
+  companyId?: string;
+};
 
 function getClientInfo(req: NextRequest) {
   const ip =
@@ -22,7 +42,8 @@ function getClientInfo(req: NextRequest) {
 export async function logAudit(
   req: NextRequest,
   action: AuditAction,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
+  context?: AuditContext
 ): Promise<void> {
   try {
     const { ip, ua } = getClientInfo(req);
@@ -33,6 +54,9 @@ export async function logAudit(
         details: details ?? null,
         ip_address: ip,
         user_agent: ua,
+        actor_type: context?.actorType ?? null,
+        actor_id: context?.actorId ?? null,
+        company_id: context?.companyId ?? null,
       });
   } catch {
     /* 監査ログの失敗は本体処理を止めない */

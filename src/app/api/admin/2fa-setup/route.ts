@@ -1,27 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifyToken } from "@/lib/admin-session";
-import { generateSecret, buildOtpAuthUrl, isTotpEnabled, verifyTOTP } from "@/lib/totp";
+import { requireTenantContext } from "@/lib/tenant-context";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { generateSecret, buildOtpAuthUrl, verifyTOTP } from "@/lib/totp";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 
 export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE)?.value;
-    if (!verifyToken(token)) {
-      return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
-    }
+    const guard = await requireTenantContext();
+    if (guard.error) return guard.error;
+    const { adminId, companyId } = guard.ctx;
 
-    await logAudit(req, "admin_2fa_setup_view");
+    await logAudit(req, "admin_2fa_setup_view", undefined, {
+      actorType: "admin", actorId: adminId, companyId,
+    });
 
-    const enabled = isTotpEnabled();
+    const supabase = getSupabaseAdmin();
+    const { data: admin } = await supabase
+      .from("admins")
+      .select("totp_secret, email")
+      .eq("id", adminId)
+      .maybeSingle();
+
     const newSecret = generateSecret();
-    const otpauthUrl = buildOtpAuthUrl(newSecret, "admin", "RakurakuKintai");
+    const account = admin?.email ?? "admin";
+    const otpauthUrl = buildOtpAuthUrl(newSecret, account, "RakurakuKintai");
 
     return NextResponse.json({
       ok: true,
-      currentlyEnabled: enabled,
+      currentlyEnabled: !!admin?.totp_secret,
       newSecret,
       otpauthUrl,
     });
@@ -32,17 +39,25 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE)?.value;
-    if (!verifyToken(token)) {
-      return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
-    }
+    const guard = await requireTenantContext();
+    if (guard.error) return guard.error;
+    const { adminId, companyId } = guard.ctx;
 
-    let body: { secret?: string; code?: string };
+    let body: { secret?: string; code?: string; action?: "verify" | "enable" | "disable" };
     try {
       body = await req.json();
     } catch {
       return NextResponse.json({ ok: false, message: "不正なリクエスト" }, { status: 400 });
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    if (body.action === "disable") {
+      await supabase.from("admins").update({ totp_secret: null }).eq("id", adminId);
+      await logAudit(req, "admin_2fa_setup_view", { action: "disabled" }, {
+        actorType: "admin", actorId: adminId, companyId,
+      });
+      return NextResponse.json({ ok: true, disabled: true });
     }
 
     if (!body.secret || !body.code) {
@@ -50,7 +65,18 @@ export async function POST(req: NextRequest) {
     }
 
     const valid = verifyTOTP(body.secret, body.code);
-    return NextResponse.json({ ok: true, valid });
+    if (!valid) {
+      return NextResponse.json({ ok: true, valid: false });
+    }
+
+    if (body.action === "enable") {
+      await supabase.from("admins").update({ totp_secret: body.secret }).eq("id", adminId);
+      await logAudit(req, "admin_2fa_setup_view", { action: "enabled" }, {
+        actorType: "admin", actorId: adminId, companyId,
+      });
+    }
+
+    return NextResponse.json({ ok: true, valid: true, saved: body.action === "enable" });
   } catch (e) {
     return errorResponse(e);
   }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/LiffProvider";
-import { ArrowLeft, Send, CheckCircle } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle, AlertCircle } from "lucide-react";
 
 const CONDITIONS = [
   { score: 5, emoji: "😄", label: "絶好調！", color: "bg-green-100 border-green-400 text-green-700" },
@@ -20,10 +20,33 @@ export default function ConditionPage() {
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [featureEnabled, setFeatureEnabled] = useState<boolean | null>(null);
+  const [commentRequired, setCommentRequired] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!profile) return;
+    authedFetch("/api/me/profile", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && data.settings) {
+          setFeatureEnabled(data.settings.feature_condition);
+          setCommentRequired(!!data.settings.comment_required);
+        } else {
+          setFeatureEnabled(true);
+        }
+      })
+      .catch(() => setFeatureEnabled(true));
+  }, [profile, authedFetch]);
 
   const handleSubmit = async () => {
     if (!profile || selected === null || loading) return;
+    if (commentRequired && !comment.trim()) {
+      setError("この会社ではコメント入力が必須です");
+      return;
+    }
     setLoading(true);
+    setError("");
 
     const res = await authedFetch("/api/me/condition", {
       method: "POST",
@@ -33,9 +56,35 @@ export default function ConditionPage() {
 
     if (data.ok) {
       setSubmitted(true);
+    } else {
+      setError(data.message ?? "送信に失敗しました");
     }
     setLoading(false);
   };
+
+  if (featureEnabled === null) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-8 h-8 border-4 border-[#06C755] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (featureEnabled === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-6 text-center">
+        <AlertCircle size={48} className="text-gray-300" />
+        <h2 className="text-lg font-bold text-gray-700">コンディション報告は利用できません</h2>
+        <p className="text-sm text-gray-500">この会社ではこの機能が無効になっています。</p>
+        <button
+          onClick={() => router.push("/")}
+          className="mt-4 bg-[#06C755] text-white px-6 py-2 rounded-full font-bold"
+        >
+          ホームに戻る
+        </button>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (
@@ -60,7 +109,6 @@ export default function ConditionPage() {
 
   return (
     <div className="flex flex-col min-h-screen max-w-md mx-auto">
-      {/* ヘッダー */}
       <header className="bg-[#06C755] text-white px-4 py-3 flex items-center gap-3 shadow-md">
         <button onClick={() => router.push("/")} className="p-1">
           <ArrowLeft size={22} />
@@ -78,7 +126,6 @@ export default function ConditionPage() {
           </h2>
         </div>
 
-        {/* コンディション選択 */}
         <div className="flex flex-col gap-3">
           {CONDITIONS.map((c) => (
             <button
@@ -99,14 +146,13 @@ export default function ConditionPage() {
           ))}
         </div>
 
-        {/* コメント入力 */}
         <div className="bg-white rounded-2xl shadow p-4">
           <label className="text-sm font-semibold text-gray-500 block mb-2">
-            一言コメント（任意）
+            一言コメント{commentRequired ? "（必須）" : "（任意）"}
           </label>
           <textarea
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
+            onChange={(e) => { setComment(e.target.value); setError(""); }}
             placeholder="今日の状況を一言で教えてください..."
             maxLength={200}
             rows={3}
@@ -117,7 +163,13 @@ export default function ConditionPage() {
           </p>
         </div>
 
-        {/* 送信ボタン */}
+        {error && (
+          <div className="flex items-center gap-1.5 text-red-500 text-sm">
+            <AlertCircle size={14} />
+            <span>{error}</span>
+          </div>
+        )}
+
         <button
           onClick={handleSubmit}
           disabled={selected === null || loading}

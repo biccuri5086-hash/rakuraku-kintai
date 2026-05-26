@@ -36,6 +36,13 @@ yarn-error.log*
 # vercel
 .vercel
 
+# credentials / secrets (NEVER commit)
+認証情報.txt
+２FAシークレットキー.txt
+*credentials*
+*secret*
+*password*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

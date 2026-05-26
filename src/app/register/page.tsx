@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useLiff } from "@/components/LiffProvider";
-import { Phone, CheckCircle, AlertCircle, MapPin, User as UserIcon } from "lucide-react";
+import { Phone, CheckCircle, AlertCircle, MapPin, User as UserIcon, Building2 } from "lucide-react";
 import { Footer } from "@/components/Footer";
 
 export default function RegisterPage() {
@@ -14,6 +14,47 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteChecking, setInviteChecking] = useState(true);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const fromUrl = url.searchParams.get("invite");
+    let stored: string | null = null;
+    try { stored = sessionStorage.getItem("rk_invite"); } catch {}
+    const code = fromUrl ?? stored;
+    if (fromUrl) {
+      try { sessionStorage.setItem("rk_invite", fromUrl); } catch {}
+    }
+    setInviteCode(code);
+
+    (async () => {
+      if (!profile) return;
+      const meRes = await authedFetch("/api/me/profile", { cache: "no-store" });
+      const meData = await meRes.json();
+      if (meData.ok && meData.profile?.company_id) {
+        setCompanyName(meData.company?.name ?? null);
+        setInviteChecking(false);
+        return;
+      }
+
+      if (!code) {
+        setInviteError("招待リンクから開いてください。所属する派遣会社が特定できません。");
+        setInviteChecking(false);
+        return;
+      }
+      const res = await fetch(`/api/invite/${encodeURIComponent(code)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.ok) {
+        setCompanyName(data.company.name);
+      } else {
+        setInviteError(data.message ?? "招待リンクが無効です");
+      }
+      setInviteChecking(false);
+    })();
+  }, [profile, authedFetch]);
 
   const handleSubmit = async () => {
     if (!profile || loading) return;
@@ -22,7 +63,11 @@ export default function RegisterPage() {
 
     const res = await authedFetch("/api/me/register", {
       method: "POST",
-      body: JSON.stringify({ phone: input, full_name: fullName }),
+      body: JSON.stringify({
+        phone: input,
+        full_name: fullName,
+        invite_code: inviteCode ?? undefined,
+      }),
     });
     const data = await res.json();
 
@@ -46,6 +91,29 @@ export default function RegisterPage() {
     );
   }
 
+  if (inviteChecking) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3">
+        <div className="w-8 h-8 border-4 border-[#06C755] border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-400 text-sm">確認中...</p>
+      </div>
+    );
+  }
+
+  if (inviteError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-6 text-center">
+        <AlertCircle size={48} className="text-red-400" />
+        <h2 className="text-lg font-bold text-gray-800">登録できません</h2>
+        <p className="text-sm text-gray-500">{inviteError}</p>
+        <p className="text-xs text-gray-400 mt-4">
+          所属する派遣会社の管理者から「招待リンク」を共有してもらい、
+          そのリンクから開き直してください。
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen max-w-md mx-auto">
       <header className="bg-[#06C755] text-white px-4 py-3 shadow-md">
@@ -54,6 +122,16 @@ export default function RegisterPage() {
       </header>
 
       <main className="flex flex-col flex-1 px-6 py-8 gap-6">
+        {companyName && (
+          <div className="bg-green-50 border border-green-100 rounded-xl p-3 flex items-center gap-2">
+            <Building2 size={20} className="text-[#06C755]" />
+            <div>
+              <p className="text-xs text-green-600 font-semibold">所属会社</p>
+              <p className="text-sm font-bold text-gray-800">{companyName}</p>
+            </div>
+          </div>
+        )}
+
         <div className="text-center">
           <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <Phone size={28} className="text-[#06C755]" />
@@ -74,10 +152,7 @@ export default function RegisterPage() {
             <input
               type="text"
               value={fullName}
-              onChange={(e) => {
-                setFullName(e.target.value);
-                setError("");
-              }}
+              onChange={(e) => { setFullName(e.target.value); setError(""); }}
               placeholder="例：山田 太郎"
               maxLength={50}
               className="w-full border-2 border-gray-200 rounded-xl pl-10 pr-4 py-3 text-lg focus:outline-none focus:border-[#06C755] text-gray-800 placeholder-gray-300"
@@ -96,10 +171,7 @@ export default function RegisterPage() {
           <input
             type="tel"
             value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              setError("");
-            }}
+            onChange={(e) => { setInput(e.target.value); setError(""); }}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             placeholder="例：090-1234-5678"
             className="border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:border-[#06C755] text-gray-800 placeholder-gray-300"

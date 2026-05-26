@@ -8,11 +8,23 @@ export async function GET(req: NextRequest) {
     const user = await getLineUserCached(req);
     if (!user) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
 
+    const supabase = getSupabaseAdmin();
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("company_id")
+      .eq("user_id", user.userId)
+      .maybeSingle();
+
+    if (!profile?.company_id) {
+      return NextResponse.json({ ok: true, clockIn: null, clockOut: null });
+    }
+
     const today = new Date().toISOString().split("T")[0];
-    const { data, error } = await getSupabaseAdmin()
+    const { data, error } = await supabase
       .from("attendance")
       .select("type, timestamp")
       .eq("user_id", user.userId)
+      .eq("company_id", profile.company_id)
       .gte("timestamp", `${today}T00:00:00`)
       .order("timestamp", { ascending: true });
 

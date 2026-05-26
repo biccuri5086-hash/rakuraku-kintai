@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, AlertCircle, KeyRound } from "lucide-react";
+import { Lock, AlertCircle, KeyRound, Mail } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [showTotp, setShowTotp] = useState(false);
@@ -13,7 +14,7 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!password || loading) return;
+    if (!email || !password || loading) return;
     if (showTotp && totp.length !== 6) {
       setError("6桁の認証コードを入力してください");
       return;
@@ -24,7 +25,7 @@ export default function AdminLoginPage() {
     const res = await fetch("/api/admin/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, totp: showTotp ? totp : undefined }),
+      body: JSON.stringify({ email, password, totp: showTotp ? totp : undefined }),
     });
 
     const data = await res.json();
@@ -61,13 +62,28 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="flex flex-col gap-3">
+          <div className="relative">
+            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              placeholder="メールアドレス"
+              autoComplete="username"
+              autoFocus
+              disabled={showTotp}
+              className="w-full border-2 border-gray-200 rounded-xl pl-9 pr-4 py-3 text-base focus:outline-none focus:border-[#06C755] text-gray-800 disabled:bg-gray-50"
+            />
+          </div>
+
           <input
             type="password"
             value={password}
             onChange={(e) => { setPassword(e.target.value); setError(""); }}
             onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            placeholder="パスワードを入力"
-            autoFocus
+            placeholder="パスワード"
+            autoComplete="current-password"
             disabled={showTotp}
             className="border-2 border-gray-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-[#06C755] text-gray-800 disabled:bg-gray-50"
           />
@@ -100,11 +116,15 @@ export default function AdminLoginPage() {
           )}
           <button
             onClick={handleLogin}
-            disabled={!password || loading || (showTotp && totp.length !== 6)}
+            disabled={!email || !password || loading || (showTotp && totp.length !== 6)}
             className="bg-[#06C755] disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-xl py-3 font-bold transition-all active:scale-95"
           >
             {loading ? "確認中..." : "ログイン"}
           </button>
+
+          <p className="text-[10px] text-gray-400 text-center mt-2">
+            アカウントをお持ちでない場合はサービス提供元にお問い合わせください
+          </p>
         </div>
       </div>
     </div>

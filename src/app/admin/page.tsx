@@ -43,9 +43,12 @@ function calcWorkHours(clockIn: string | null, clockOut: string | null): string 
   return `${h}h ${m}m`;
 }
 
+type CompanyInfo = { id: string; name: string; plan: string; status: string };
+
 export default function AdminPage() {
   const router = useRouter();
   const [authed, setAuthed] = useState(false);
+  const [company, setCompany] = useState<CompanyInfo | null>(null);
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,10 +57,16 @@ export default function AdminPage() {
   useEffect(() => {
     let cancelled = false;
     fetch("/api/admin/me", { cache: "no-store" })
-      .then((res) => {
+      .then(async (res) => {
         if (cancelled) return;
         if (res.ok) {
-          setAuthed(true);
+          const data = await res.json();
+          if (data.ok) {
+            setAuthed(true);
+            setCompany(data.company ?? null);
+          } else {
+            router.replace("/admin/login");
+          }
         } else {
           router.replace("/admin/login");
         }
@@ -108,8 +117,11 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-[#06C755] text-white px-4 py-3 flex items-center justify-between shadow-md">
         <div>
-          <h1 className="text-lg font-bold">ラクラク勤怠</h1>
-          <p className="text-xs text-green-100">管理者ダッシュボード</p>
+          <h1 className="text-lg font-bold">{company?.name ?? "ラクラク勤怠"}</h1>
+          <p className="text-xs text-green-100">
+            管理者ダッシュボード
+            {company?.status === "trial" && <span className="ml-2 bg-yellow-300 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-bold">試用中</span>}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button

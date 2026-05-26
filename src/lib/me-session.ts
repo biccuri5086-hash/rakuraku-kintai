@@ -7,9 +7,9 @@ const COOKIE_NAME = "me_session";
 const TTL_SECONDS = 30 * 60;
 
 function getSecret(): string {
-  const pw = process.env.ADMIN_PASSWORD;
-  if (!pw) throw new Error("ADMIN_PASSWORD is not configured");
-  return pw;
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 16) throw new Error("SESSION_SECRET must be configured (>= 16 chars)");
+  return secret;
 }
 
 function sign(payload: string): string {

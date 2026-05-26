@@ -28,6 +28,8 @@ function formatDate(date: Date) {
   });
 }
 
+type Features = { feature_condition: boolean; feature_gps: boolean };
+
 export default function HomePage() {
   const { isReady, profile, authedFetch } = useLiff();
   const router = useRouter();
@@ -38,6 +40,8 @@ export default function HomePage() {
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "done">("idle");
   const [tapped, setTapped] = useState(false);
   const [clockInDone, setClockInDone] = useState(false);
+  const [features, setFeatures] = useState<Features>({ feature_condition: true, feature_gps: true });
+  const [companyName, setCompanyName] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -46,12 +50,23 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!isReady || !profile) return;
+    const invite = new URLSearchParams(window.location.search).get("invite");
+    if (invite) {
+      try { sessionStorage.setItem("rk_invite", invite); } catch {}
+    }
     authedFetch("/api/me/profile", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (!data.ok || !data.profile?.phone) {
           router.replace("/register");
         } else {
+          if (data.settings) {
+            setFeatures({
+              feature_condition: !!data.settings.feature_condition,
+              feature_gps: !!data.settings.feature_gps,
+            });
+          }
+          if (data.company?.name) setCompanyName(data.company.name);
           setProfileChecked(true);
         }
       })
@@ -82,8 +97,8 @@ export default function HomePage() {
 
     if (data.ok) {
       if (type === "clock_in") {
-        setGpsStatus("acquiring");
-        if (navigator.geolocation) {
+        if (features.feature_gps && navigator.geolocation) {
+          setGpsStatus("acquiring");
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               const gps = {
@@ -102,7 +117,11 @@ export default function HomePage() {
           );
         }
         setClockInDone(true);
-        setTimeout(() => router.push("/condition"), 3000);
+        if (features.feature_condition) {
+          setTimeout(() => router.push("/condition"), 3000);
+        } else {
+          setTimeout(() => setClockInDone(false), 3000);
+        }
       } else {
         setTapped((v) => !v);
       }
@@ -135,7 +154,10 @@ export default function HomePage() {
   return (
     <div className="flex flex-col min-h-screen max-w-md mx-auto">
       <header className="bg-[#06C755] text-white px-4 py-3 flex items-center justify-between shadow-md">
-        <h1 className="text-lg font-bold tracking-wide">ラクラク勤怠</h1>
+        <div>
+          <h1 className="text-lg font-bold tracking-wide">ラクラク勤怠</h1>
+          {companyName && <p className="text-[10px] text-green-100">{companyName}</p>}
+        </div>
         <div className="flex items-center gap-2">
           {profile?.pictureUrl ? (
             <Image
@@ -220,12 +242,14 @@ export default function HomePage() {
           </button>
         )}
 
-        <button
-          onClick={() => router.push("/condition")}
-          className="bg-white border border-gray-200 rounded-2xl shadow p-4 text-center text-gray-600 font-medium hover:bg-gray-50 transition-colors"
-        >
-          😊 コンディション報告
-        </button>
+        {features.feature_condition && (
+          <button
+            onClick={() => router.push("/condition")}
+            className="bg-white border border-gray-200 rounded-2xl shadow p-4 text-center text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+          >
+            😊 コンディション報告
+          </button>
+        )}
 
         <button
           onClick={() => router.push("/admin")}

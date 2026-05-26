@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { SESSION_COOKIE } from "@/lib/admin-session";
+import { TENANT_SESSION_COOKIE } from "@/lib/tenant-session";
+import { getTenantContext } from "@/lib/tenant-context";
 import { logAudit } from "@/lib/audit-log";
 
 export async function POST(req: NextRequest) {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
-  await logAudit(req, "admin_logout");
+  const ctx = await getTenantContext();
+  if (ctx) {
+    await logAudit(req, "admin_logout", undefined, {
+      actorType: "admin", actorId: ctx.adminId, companyId: ctx.companyId,
+    });
+  }
+  const store = await cookies();
+  store.set(TENANT_SESSION_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
   return NextResponse.json({ ok: true });
 }
