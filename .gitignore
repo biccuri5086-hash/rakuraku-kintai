@@ -39,9 +39,10 @@ yarn-error.log*
 # credentials / secrets (NEVER commit)
 認証情報.txt
 ２FAシークレットキー.txt
-*credentials*
-*secret*
-*password*
+/credentials.*
+/secrets.*
+*.pem
+*.key
 
 # DB backup dumps (contain user data — NEVER commit)
 /backup/
