@@ -100,12 +100,12 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const { data: company } = await supabase.from("companies").select("name").eq("id", id).maybeSingle();
     if (!company) return NextResponse.json({ ok: false, message: "見つかりません" }, { status: 404 });
 
-    const { error } = await supabase.from("companies").delete().eq("id", id);
-    if (error) throw new Error(error.message);
-
     await logAudit(req, "super_company_delete", { name: company.name }, {
       actorType: "super_admin", actorId: guard.ctx.superAdminId, companyId: id,
     });
+
+    const { error } = await supabase.from("companies").delete().eq("id", id);
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({ ok: true });
   } catch (e) {
