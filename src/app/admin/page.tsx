@@ -49,7 +49,10 @@ export default function AdminPage() {
   const router = useRouter();
   const [authed, setAuthed] = useState(false);
   const [company, setCompany] = useState<CompanyInfo | null>(null);
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => {
+    const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    return jst.toISOString().split("T")[0];
+  });
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { jstToday, jstDayBounds } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 
@@ -32,13 +33,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "プロフィール未登録です。先にスタッフ登録を済ませてください。" }, { status: 400 });
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    const { start, end } = jstDayBounds(jstToday());
     const { data: existing } = await supabase
       .from("attendance")
       .select("id, type")
       .eq("user_id", user.userId)
       .eq("company_id", profile.company_id)
-      .gte("timestamp", `${today}T00:00:00`)
+      .gte("timestamp", start)
+      .lte("timestamp", end)
       .order("timestamp", { ascending: false });
 
     const todayRecords = (existing ?? []) as { id: string; type: string }[];

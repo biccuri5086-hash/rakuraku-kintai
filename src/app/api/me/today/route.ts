@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { jstToday, jstDayBounds } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 
 export async function GET(req: NextRequest) {
@@ -19,13 +20,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, clockIn: null, clockOut: null });
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    const { start, end } = jstDayBounds(jstToday());
     const { data, error } = await supabase
       .from("attendance")
       .select("type, timestamp")
       .eq("user_id", user.userId)
       .eq("company_id", profile.company_id)
-      .gte("timestamp", `${today}T00:00:00`)
+      .gte("timestamp", start)
+      .lte("timestamp", end)
       .order("timestamp", { ascending: true });
 
     if (error) throw new Error(`supabase: ${error.message}`);

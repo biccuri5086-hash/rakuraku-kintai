@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireTenantContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { decryptPhone } from "@/lib/crypto";
+import { jstToday, jstDayBounds } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     if (guard.error) return guard.error;
     const { adminId, companyId } = guard.ctx;
 
-    const date = new URL(req.url).searchParams.get("date") ?? new Date().toISOString().split("T")[0];
+    const date = new URL(req.url).searchParams.get("date") ?? jstToday();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json({ ok: false, message: "日付形式が不正" }, { status: 400 });
     }
@@ -46,21 +47,22 @@ export async function GET(req: NextRequest) {
       actorType: "admin", actorId: adminId, companyId,
     });
 
+    const { start, end } = jstDayBounds(date);
     const supabase = getSupabaseAdmin();
     const [{ data: attendance }, { data: conditions }, { data: profiles }] = await Promise.all([
       supabase
         .from("attendance")
         .select("id, user_id, user_name, type, timestamp")
         .eq("company_id", companyId)
-        .gte("timestamp", `${date}T00:00:00`)
-        .lte("timestamp", `${date}T23:59:59`)
+        .gte("timestamp", start)
+        .lte("timestamp", end)
         .order("timestamp", { ascending: true }),
       supabase
         .from("condition_reports")
         .select("id, user_id, score, comment, reported_at")
         .eq("company_id", companyId)
-        .gte("reported_at", `${date}T00:00:00`)
-        .lte("reported_at", `${date}T23:59:59`)
+        .gte("reported_at", start)
+        .lte("reported_at", end)
         .order("reported_at", { ascending: false }),
       supabase
         .from("user_profiles")
