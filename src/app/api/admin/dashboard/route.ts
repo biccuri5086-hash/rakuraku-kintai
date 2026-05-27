@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { decryptPhone } from "@/lib/crypto";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 
@@ -69,7 +70,11 @@ export async function GET(req: NextRequest) {
 
     const profileMap = new Map<string, { display_name: string; full_name: string | null; phone: string | null }>();
     for (const p of (profiles ?? []) as { user_id: string; display_name: string; full_name: string | null; phone: string | null }[]) {
-      profileMap.set(p.user_id, { display_name: p.display_name, full_name: p.full_name, phone: p.phone });
+      profileMap.set(p.user_id, {
+        display_name: p.display_name,
+        full_name: p.full_name,
+        phone: p.phone ? decryptPhone(p.phone) : null,
+      });
     }
 
     const userMap = new Map<string, UserSummary>();

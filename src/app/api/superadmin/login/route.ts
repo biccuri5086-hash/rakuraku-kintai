@@ -15,7 +15,7 @@ function rateLimitKey(req: NextRequest): string {
 export async function POST(req: NextRequest) {
   try {
     const key = rateLimitKey(req);
-    const limit = checkRateLimit(key);
+    const limit = await checkRateLimit(key);
     if (!limit.allowed) {
       await logAudit(req, "super_login_failure", { reason: "rate_limited", remaining_sec: limit.resetInSec });
       return NextResponse.json(
@@ -45,12 +45,12 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (!admin || !admin.is_active || !verifyPassword(password, admin.password_hash)) {
-      recordFailure(key);
+      await recordFailure(key);
       await logAudit(req, "super_login_failure", { email });
       return NextResponse.json({ ok: false, message: "メールまたはパスワードが正しくありません" }, { status: 401 });
     }
 
-    recordSuccess(key);
+    await recordSuccess(key);
     await supabase.from("super_admins").update({ last_login_at: new Date().toISOString() }).eq("id", admin.id);
     await logAudit(req, "super_login_success", { email }, { actorType: "super_admin", actorId: admin.id });
 

@@ -89,7 +89,9 @@ export default function LpPage() {
         >
           LINEで無料体験 →
         </a>
-        <p className="text-green-100 text-sm">お問い合わせ：（メールアドレスを追記してください）</p>
+        <p className="text-green-100 text-sm">
+          お問い合わせ：<a href="mailto:biccuri5086@gmail.com" className="underline">biccuri5086@gmail.com</a>
+        </p>
       </div>
 
       {/* フッター */}

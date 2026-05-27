@@ -18,6 +18,8 @@ export default function RegisterPage() {
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteChecking, setInviteChecking] = useState(true);
+  const [gpsConsent, setGpsConsent] = useState(false);
+  const [termsConsent, setTermsConsent] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -67,6 +69,9 @@ export default function RegisterPage() {
         phone: input,
         full_name: fullName,
         invite_code: inviteCode ?? undefined,
+        gps_consent: gpsConsent,
+        terms_consent: termsConsent,
+        consented_at: new Date().toISOString(),
       }),
     });
     const data = await res.json();
@@ -187,18 +192,44 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        <div className="bg-blue-50 rounded-xl p-3 flex gap-2 items-start border border-blue-100">
-          <MapPin size={16} className="text-blue-400 mt-0.5 shrink-0" />
-          <p className="text-xs text-blue-600 leading-relaxed">
-            打刻時に位置情報（GPS）を取得する場合があります。これは勤怠確認のためのみ使用され、
-            ブラウザの許可設定でいつでも無効にできます。
-            詳しくは<a href="/privacy" className="underline">プライバシーポリシー</a>をご確認ください。
+        <label className="bg-blue-50 rounded-xl p-3 flex gap-2 items-start border border-blue-100 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={gpsConsent}
+            onChange={(e) => setGpsConsent(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-[#06C755] shrink-0"
+          />
+          <div className="flex-1">
+            <p className="text-xs text-blue-700 font-semibold flex items-center gap-1">
+              <MapPin size={14} className="text-blue-500" />
+              位置情報（GPS）取得に同意する
+            </p>
+            <p className="text-xs text-blue-600 leading-relaxed mt-1">
+              出勤打刻の正確性を確認するため、打刻時にGPSを取得することがあります。
+              取得した位置情報は勤怠確認のためのみ使用され、ブラウザ設定でいつでも無効化できます。
+              詳細は<a href="/privacy" className="underline" onClick={(e) => e.stopPropagation()}>プライバシーポリシー</a>。
+            </p>
+          </div>
+        </label>
+
+        <label className="bg-gray-50 rounded-xl p-3 flex gap-2 items-start border border-gray-200 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={termsConsent}
+            onChange={(e) => setTermsConsent(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-[#06C755] shrink-0"
+          />
+          <p className="text-xs text-gray-700 leading-relaxed flex-1">
+            <a href="/terms" className="underline text-[#06C755]" onClick={(e) => e.stopPropagation()}>利用規約</a>
+            および
+            <a href="/privacy" className="underline text-[#06C755]" onClick={(e) => e.stopPropagation()}>プライバシーポリシー</a>
+            に同意します
           </p>
-        </div>
+        </label>
 
         <button
           onClick={handleSubmit}
-          disabled={!input || !fullName.trim() || loading}
+          disabled={!input || !fullName.trim() || !gpsConsent || !termsConsent || loading}
           className="bg-[#06C755] disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-2xl py-5 text-lg font-bold shadow-lg transition-all active:scale-95 mt-auto"
         >
           {loading ? (

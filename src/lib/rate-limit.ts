@@ -1,8 +1,7 @@
+import { getSupabaseAdmin } from "./supabase-admin";
+
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
-
-type Entry = { count: number; resetAt: number };
-const store = new Map<string, Entry>();
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -10,28 +9,51 @@ export type RateLimitResult = {
   resetInSec: number;
 };
 
-export function checkRateLimit(key: string): RateLimitResult {
-  const now = Date.now();
-  const rec = store.get(key);
-  if (!rec || rec.resetAt < now) {
+export async function checkRateLimit(key: string): Promise<RateLimitResult> {
+  const supabase = getSupabaseAdmin();
+  const now = new Date();
+  const { data } = await supabase
+    .from("rate_limits")
+    .select("count, reset_at")
+    .eq("key", key)
+    .maybeSingle();
+
+  if (!data || new Date(data.reset_at) < now) {
     return { allowed: true, remaining: MAX_ATTEMPTS, resetInSec: 0 };
   }
-  if (rec.count >= MAX_ATTEMPTS) {
-    return { allowed: false, remaining: 0, resetInSec: Math.ceil((rec.resetAt - now) / 1000) };
+  if (data.count >= MAX_ATTEMPTS) {
+    const resetInSec = Math.ceil((new Date(data.reset_at).getTime() - now.getTime()) / 1000);
+    return { allowed: false, remaining: 0, resetInSec };
   }
-  return { allowed: true, remaining: MAX_ATTEMPTS - rec.count, resetInSec: 0 };
+  return { allowed: true, remaining: MAX_ATTEMPTS - data.count, resetInSec: 0 };
 }
 
-export function recordFailure(key: string): void {
-  const now = Date.now();
-  const rec = store.get(key);
-  if (!rec || rec.resetAt < now) {
-    store.set(key, { count: 1, resetAt: now + WINDOW_MS });
-  } else {
-    rec.count += 1;
+export async function recordFailure(key: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const now = new Date();
+  const { data } = await supabase
+    .from("rate_limits")
+    .select("count, reset_at")
+    .eq("key", key)
+    .maybeSingle();
+
+  if (!data || new Date(data.reset_at) < now) {
+    await supabase.from("rate_limits").upsert({
+      key,
+      count: 1,
+      reset_at: new Date(now.getTime() + WINDOW_MS).toISOString(),
+      updated_at: now.toISOString(),
+    });
+    return;
   }
+
+  await supabase
+    .from("rate_limits")
+    .update({ count: data.count + 1, updated_at: now.toISOString() })
+    .eq("key", key);
 }
 
-export function recordSuccess(key: string): void {
-  store.delete(key);
+export async function recordSuccess(key: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  await supabase.from("rate_limits").delete().eq("key", key);
 }

@@ -16,7 +16,7 @@ function clientKey(req: NextRequest): string {
 export async function POST(req: NextRequest) {
   try {
     const key = clientKey(req);
-    const limit = checkRateLimit(key);
+    const limit = await checkRateLimit(key);
     if (!limit.allowed) {
       const mins = Math.ceil(limit.resetInSec / 60);
       await logAudit(req, "admin_login_rate_limited", { remaining_sec: limit.resetInSec });
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (!admin || !admin.is_active || !verifyPassword(password, admin.password_hash)) {
-      recordFailure(key);
+      await recordFailure(key);
       await logAudit(req, "admin_login_failure", { email });
       return NextResponse.json({ ok: false, message: "メールまたはパスワードが正しくありません" }, { status: 401 });
     }
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
         );
       }
       if (!verifyTOTP(admin.totp_secret, totpCode)) {
-        recordFailure(key);
+        await recordFailure(key);
         await logAudit(req, "admin_login_2fa_failure", { email }, {
           actorType: "admin", actorId: admin.id, companyId: admin.company_id,
         });
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    recordSuccess(key);
+    await recordSuccess(key);
     await supabase.from("admins").update({ last_login_at: new Date().toISOString() }).eq("id", admin.id);
     await logAudit(req, "admin_login_success", { email, totp_used: !!admin.totp_secret }, {
       actorType: "admin", actorId: admin.id, companyId: admin.company_id,

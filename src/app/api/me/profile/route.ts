@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { decryptPhone } from "@/lib/crypto";
 import { errorResponse } from "@/lib/api-handler";
 
 export async function GET(req: NextRequest) {
@@ -33,9 +34,14 @@ export async function GET(req: NextRequest) {
       .eq("company_id", profile.company_id)
       .maybeSingle();
 
+    const decryptedProfile = {
+      ...profile,
+      phone: profile.phone ? decryptPhone(profile.phone) : null,
+    };
+
     return NextResponse.json({
       ok: true,
-      profile,
+      profile: decryptedProfile,
       company,
       settings,
     });

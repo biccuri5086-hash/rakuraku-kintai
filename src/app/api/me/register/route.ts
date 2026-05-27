@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { normalizePhone } from "@/lib/phone";
+import { encryptPhone, hashPhone } from "@/lib/crypto";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 
@@ -15,7 +16,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let body: { phone?: string; full_name?: string; invite_code?: string };
+    let body: {
+      phone?: string;
+      full_name?: string;
+      invite_code?: string;
+      gps_consent?: boolean;
+      terms_consent?: boolean;
+      consented_at?: string;
+    };
     try {
       body = await req.json();
     } catch {
@@ -30,6 +38,13 @@ export async function POST(req: NextRequest) {
     const fullName = (body.full_name ?? "").trim();
     if (!fullName || fullName.length < 2 || fullName.length > 50) {
       return NextResponse.json({ ok: false, message: "本名を2文字以上50文字以内で入力してください" }, { status: 400 });
+    }
+
+    if (body.terms_consent !== true || body.gps_consent !== true) {
+      return NextResponse.json(
+        { ok: false, message: "利用規約および位置情報取得への同意が必要です" },
+        { status: 400 }
+      );
     }
 
     const supabase = getSupabaseAdmin();
@@ -64,10 +79,13 @@ export async function POST(req: NextRequest) {
       companyId = company.id;
     }
 
+    const phoneHash = hashPhone(phone);
+    const encryptedPhone = encryptPhone(phone);
+
     const { data: dup } = await supabase
       .from("user_profiles")
       .select("user_id, role")
-      .eq("phone", phone)
+      .eq("phone_hash", phoneHash)
       .eq("company_id", companyId)
       .neq("user_id", user.userId)
       .maybeSingle();
@@ -84,15 +102,24 @@ export async function POST(req: NextRequest) {
         user_id: user.userId,
         display_name: user.displayName,
         full_name: fullName,
-        phone,
+        phone: encryptedPhone,
+        phone_hash: phoneHash,
         company_id: companyId,
       });
 
     if (error) throw new Error(`supabase: ${error.message}`);
 
-    await logAudit(req, "staff_register", { phone_suffix: phone.slice(-4) }, {
-      actorType: "staff", actorId: user.userId, companyId: companyId ?? undefined,
-    });
+    await logAudit(
+      req,
+      "staff_register",
+      {
+        phone_suffix: phone.slice(-4),
+        gps_consent: true,
+        terms_consent: true,
+        consented_at: body.consented_at ?? new Date().toISOString(),
+      },
+      { actorType: "staff", actorId: user.userId, companyId: companyId ?? undefined }
+    );
 
     return NextResponse.json({ ok: true, phone });
   } catch (e) {
