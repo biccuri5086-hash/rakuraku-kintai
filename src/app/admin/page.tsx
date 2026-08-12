@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Users, Clock, AlertCircle, LogOut, Shield, KeyRound } from "lucide-react";
+import AdminNav from "@/components/AdminNav";
 
 type ConditionRow = {
   id: string;
@@ -157,6 +158,8 @@ export default function AdminPage() {
           </button>
         </div>
       </header>
+
+      <AdminNav />
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
         <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
