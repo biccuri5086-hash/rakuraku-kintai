@@ -1,11 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Building2, CalendarClock } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, CalendarClock } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "ダッシュボード", icon: LayoutDashboard },
   { href: "/admin/clients", label: "派遣先", icon: Building2 },
+  { href: "/admin/assignments", label: "契約", icon: FileText },
   { href: "/admin/shifts", label: "シフト", icon: CalendarClock },
 ];
 
