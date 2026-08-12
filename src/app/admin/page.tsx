@@ -2,8 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Users, Clock, AlertCircle, LogOut, Shield, KeyRound } from "lucide-react";
+import { RefreshCw, Users, Clock, AlertCircle, LogOut, Shield, KeyRound, Building2, FileText, CalendarClock } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
+
+type TodayShift = { id: string; start_time: string | null; end_time: string | null; staff_name: string; client_name: string };
+type Overview = { clientsCount: number; activeAssignments: number; todayShifts: TodayShift[] };
 
 type ConditionRow = {
   id: string;
@@ -57,6 +60,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [overview, setOverview] = useState<Overview | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,7 +106,15 @@ export default function AdminPage() {
   }, [date, router]);
 
   useEffect(() => {
-    if (authed) fetchData();
+    if (authed) {
+      fetchData();
+      fetch("/api/admin/overview", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.ok) setOverview({ clientsCount: d.clientsCount, activeAssignments: d.activeAssignments, todayShifts: d.todayShifts });
+        })
+        .catch(() => {});
+    }
   }, [authed, fetchData]);
 
   const presentCount = users.filter((u) => u.clockIn).length;
@@ -194,6 +206,49 @@ export default function AdminPage() {
             <p className="text-xs text-gray-400">要フォロー</p>
           </div>
         </div>
+
+        {overview && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-2xl shadow p-4 text-center">
+                <Building2 size={20} className="text-[#06C755] mx-auto mb-1" />
+                <p className="text-2xl font-bold text-gray-800">{overview.clientsCount}</p>
+                <p className="text-xs text-gray-400">派遣先</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-4 text-center">
+                <FileText size={20} className="text-[#06C755] mx-auto mb-1" />
+                <p className="text-2xl font-bold text-gray-800">{overview.activeAssignments}</p>
+                <p className="text-xs text-gray-400">稼働中の契約</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-4 text-center">
+                <CalendarClock size={20} className="text-[#06C755] mx-auto mb-1" />
+                <p className="text-2xl font-bold text-gray-800">{overview.todayShifts.length}</p>
+                <p className="text-xs text-gray-400">本日のシフト</p>
+              </div>
+            </div>
+            {overview.todayShifts.length > 0 && (
+              <div className="bg-white rounded-2xl shadow overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-gray-100">
+                  <h2 className="font-bold text-gray-700 text-sm flex items-center gap-1.5">
+                    <CalendarClock size={15} className="text-[#06C755]" /> 本日のシフト
+                  </h2>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {overview.todayShifts.map((sh) => (
+                    <div key={sh.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
+                      <span className="text-gray-700">
+                        <span className="font-semibold">{sh.staff_name}</span> <span className="text-gray-300">→</span> {sh.client_name}
+                      </span>
+                      <span className="font-mono text-gray-500 text-xs">
+                        {sh.start_time ?? "--:--"}〜{sh.end_time ?? "--:--"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl shadow overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100">
