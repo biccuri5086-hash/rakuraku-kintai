@@ -9,6 +9,8 @@ export type AuditAction =
   | "admin_logout"
   | "admin_dashboard_view"
   | "admin_2fa_setup_view"
+  | "admin_password_changed"
+  | "admin_password_change_failure"
   | "super_login_success"
   | "super_login_failure"
   | "super_logout"
