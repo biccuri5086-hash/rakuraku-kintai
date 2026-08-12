@@ -250,13 +250,6 @@ export default function HomePage() {
             😊 コンディション報告
           </button>
         )}
-
-        <button
-          onClick={() => router.push("/admin")}
-          className="text-xs text-gray-300 hover:text-gray-400 text-center py-1 transition-colors"
-        >
-          管理者ダッシュボード →
-        </button>
       </main>
       <Footer />
     </div>
