@@ -14,6 +14,8 @@ export type AuditAction =
   | "super_login_success"
   | "super_login_failure"
   | "super_logout"
+  | "super_password_changed"
+  | "super_password_change_failure"
   | "super_company_create"
   | "super_company_update"
   | "super_company_delete"
