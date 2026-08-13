@@ -75,3 +75,19 @@ export async function POST(req: NextRequest) {
     return errorResponse(e);
   }
 }
+
+// シフトの削除
+export async function DELETE(req: NextRequest) {
+  try {
+    const ctx = await getTenantContext();
+    if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
+    const id = new URL(req.url).searchParams.get("id");
+    if (!id) return NextResponse.json({ ok: false, message: "idが必要です" }, { status: 400 });
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("shifts").delete().eq("id", id).eq("company_id", ctx.companyId);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, LogOut, ArrowRight } from "lucide-react";
+import { FileText, Plus, LogOut, ArrowRight, Trash2 } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type StaffOption = { user_id: string; name: string };
@@ -101,6 +101,14 @@ export default function AssignmentsPage() {
     setForm({ ...EMPTY });
     setShowForm(false);
     fetchAll();
+  };
+
+  const handleDelete = async (id: string, label: string) => {
+    if (!confirm(`「${label}」の契約を削除しますか？\n※この契約のシフトも一緒に削除されます。`)) return;
+    const res = await fetch(`/api/admin/assignments?id=${id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({ ok: false }));
+    if (data.ok) fetchAll();
+    else alert(data.message ?? "削除に失敗しました");
   };
 
   const handleLogout = async () => {
@@ -233,17 +241,26 @@ export default function AssignmentsPage() {
           <div className="space-y-3">
             {assignments.map((a) => (
               <div key={a.id} className="bg-white rounded-2xl shadow p-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-gray-800">{a.staff_name}</span>
-                  <ArrowRight size={14} className="text-gray-300" />
-                  <span className="font-bold text-gray-800">{a.client_name}</span>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      a.type === "ongoing" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
-                    }`}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-gray-800">{a.staff_name}</span>
+                    <ArrowRight size={14} className="text-gray-300" />
+                    <span className="font-bold text-gray-800">{a.client_name}</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        a.type === "ongoing" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {a.type === "ongoing" ? "中長期" : "単発"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(a.id, `${a.staff_name} → ${a.client_name}`)}
+                    title="削除"
+                    className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
                   >
-                    {a.type === "ongoing" ? "中長期" : "単発"}
-                  </span>
+                    <Trash2 size={16} />
+                  </button>
                 </div>
                 <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1">
                   <span>

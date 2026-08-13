@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Plus, LogOut } from "lucide-react";
+import { CalendarClock, Plus, LogOut, Trash2 } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type Assignment = {
@@ -103,6 +103,14 @@ export default function ShiftsPage() {
     setForm({ ...EMPTY });
     setShowForm(false);
     fetchAll();
+  };
+
+  const handleDelete = async (id: string, date: string) => {
+    if (!confirm(`${date} のシフトを削除しますか？`)) return;
+    const res = await fetch(`/api/admin/shifts?id=${id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({ ok: false }));
+    if (data.ok) fetchAll();
+    else alert(data.message ?? "削除に失敗しました");
   };
 
   const handleLogout = async () => {
@@ -259,7 +267,16 @@ export default function ShiftsPage() {
                 <div key={sh.id} className="bg-white rounded-2xl shadow p-4">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-gray-800">{sh.work_date}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                      <button
+                        onClick={() => handleDelete(sh.id, sh.work_date)}
+                        title="削除"
+                        className="text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm text-gray-600 mt-1">{labelOf(sh.assignment_id)}</p>
                   <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500 flex flex-wrap gap-x-4">

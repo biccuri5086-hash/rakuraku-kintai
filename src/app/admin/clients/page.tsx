@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Plus, MapPin, Phone, LogOut } from "lucide-react";
+import { Building2, Plus, MapPin, Phone, LogOut, Trash2 } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type Client = {
@@ -80,6 +80,14 @@ export default function ClientsPage() {
     setForm({ ...EMPTY });
     setShowForm(false);
     fetchClients();
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`「${name}」を削除しますか？\n※この派遣先の契約・シフトも一緒に削除されます。`)) return;
+    const res = await fetch(`/api/admin/clients?id=${id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({ ok: false }));
+    if (data.ok) fetchClients();
+    else alert(data.message ?? "削除に失敗しました");
   };
 
   const handleLogout = async () => {
@@ -181,11 +189,20 @@ export default function ClientsPage() {
                     <p className="font-bold text-gray-800">{c.name}</p>
                     {c.workplace_name && <p className="text-sm text-gray-500 mt-0.5">{c.workplace_name}</p>}
                   </div>
-                  {c.teishokubi && (
-                    <span className="text-[10px] font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
-                      抵触日 {c.teishokubi}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {c.teishokubi && (
+                      <span className="text-[10px] font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                        抵触日 {c.teishokubi}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDelete(c.id, c.name)}
+                      title="削除"
+                      className="text-gray-300 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
                 {(c.address || c.contact_name || c.contact_phone) && (
                   <div className="mt-2 pt-2 border-t border-gray-50 space-y-1 text-xs text-gray-500">
