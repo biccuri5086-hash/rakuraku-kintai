@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, LogOut, Plus, Users, RefreshCw, Settings, Copy, Check, LockKeyhole } from "lucide-react";
+import { Building2, LogOut, Plus, Users, RefreshCw, Settings, Copy, Check, LockKeyhole, Shield } from "lucide-react";
 
 type Company = {
   id: string;
@@ -88,6 +88,9 @@ export default function SuperAdminPage() {
           <p className="text-xs text-amber-400 font-bold">プラットフォーム管理</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => router.push("/superadmin/2fa-setup")} className="p-2 rounded-full bg-white/10 hover:bg-white/20" title="2段階認証">
+            <Shield size={18} />
+          </button>
           <button onClick={() => router.push("/superadmin/password")} className="p-2 rounded-full bg-white/10 hover:bg-white/20" title="パスワード変更">
             <LockKeyhole size={18} />
           </button>

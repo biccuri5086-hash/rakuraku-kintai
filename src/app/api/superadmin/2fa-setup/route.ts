@@ -1,30 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireTenantContext } from "@/lib/tenant-context";
+import { requireSuperContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { generateSecret, buildOtpAuthUrl, verifyTOTP } from "@/lib/totp";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 
+// 現在の状態＋新しいシークレット候補を返す
 export async function GET(req: NextRequest) {
   try {
-    const guard = await requireTenantContext();
+    const guard = await requireSuperContext();
     if (guard.error) return guard.error;
-    const { adminId, companyId } = guard.ctx;
-
-    await logAudit(req, "admin_2fa_setup_view", undefined, {
-      actorType: "admin", actorId: adminId, companyId,
-    });
+    const { superAdminId } = guard.ctx;
 
     const supabase = getSupabaseAdmin();
     const { data: admin } = await supabase
-      .from("admins")
+      .from("super_admins")
       .select("totp_secret, email")
-      .eq("id", adminId)
+      .eq("id", superAdminId)
       .maybeSingle();
 
+    await logAudit(req, "super_2fa_view", undefined, {
+      actorType: "super_admin", actorId: superAdminId,
+    });
+
     const newSecret = generateSecret();
-    const account = admin?.email ?? "admin";
-    const otpauthUrl = buildOtpAuthUrl(newSecret, account, "RakurakuKintai");
+    const account = admin?.email ?? "superadmin";
+    const otpauthUrl = buildOtpAuthUrl(newSecret, account, "RakurakuKintai-Owner");
 
     return NextResponse.json({
       ok: true,
@@ -37,11 +38,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// 6桁コードの検証（action:"verify"）／有効化（"enable"）／無効化（"disable"）
 export async function POST(req: NextRequest) {
   try {
-    const guard = await requireTenantContext();
+    const guard = await requireSuperContext();
     if (guard.error) return guard.error;
-    const { adminId, companyId } = guard.ctx;
+    const { superAdminId } = guard.ctx;
 
     let body: { secret?: string; code?: string; action?: "verify" | "enable" | "disable" };
     try {
@@ -53,9 +55,9 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
 
     if (body.action === "disable") {
-      await supabase.from("admins").update({ totp_secret: null }).eq("id", adminId);
-      await logAudit(req, "admin_2fa_setup_view", { action: "disabled" }, {
-        actorType: "admin", actorId: adminId, companyId,
+      await supabase.from("super_admins").update({ totp_secret: null }).eq("id", superAdminId);
+      await logAudit(req, "super_2fa_disabled", undefined, {
+        actorType: "super_admin", actorId: superAdminId,
       });
       return NextResponse.json({ ok: true, disabled: true });
     }
@@ -70,9 +72,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === "enable") {
-      await supabase.from("admins").update({ totp_secret: body.secret }).eq("id", adminId);
-      await logAudit(req, "admin_2fa_setup_view", { action: "enabled" }, {
-        actorType: "admin", actorId: adminId, companyId,
+      await supabase.from("super_admins").update({ totp_secret: body.secret }).eq("id", superAdminId);
+      await logAudit(req, "super_2fa_enabled", undefined, {
+        actorType: "super_admin", actorId: superAdminId,
       });
     }
 

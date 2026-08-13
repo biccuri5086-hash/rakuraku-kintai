@@ -8,6 +8,8 @@ export default function SuperAdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totp, setTotp] = useState("");
+  const [needTotp, setNeedTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -19,12 +21,16 @@ export default function SuperAdminLoginPage() {
       const res = await fetch("/api/superadmin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, totp: totp || undefined }),
       });
       const data = await res.json();
       if (data.ok) {
         router.replace("/superadmin");
+      } else if (data.code === "TOTP_REQUIRED") {
+        setNeedTotp(true);
+        setError("認証アプリの6桁コードを入力してください");
       } else {
+        if (data.code === "TOTP_INVALID") setNeedTotp(true);
         setError(data.message ?? "ログインに失敗しました");
       }
     } catch {
@@ -68,6 +74,23 @@ export default function SuperAdminLoginPage() {
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
             />
           </div>
+
+          {needTotp && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">認証コード（6桁）</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                autoComplete="one-time-code"
+                value={totp}
+                onChange={(e) => setTotp(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-lg font-mono text-center tracking-widest focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          )}
 
           {error && <p className="text-red-500 text-xs">{error}</p>}
 
