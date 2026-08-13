@@ -12,11 +12,13 @@ type StaffSummary = {
   days: number; // 出勤日数
   totalMinutes: number; // 実働合計（分, 休憩は未考慮）
   missingClockOut: number; // 退勤打刻もれ日数
+  hourlyRate: number | null; // 契約から取得した時給（不明ならnull）
+  estimatedPay: number | null; // 概算支給額（時給×実働、休憩・割増は未考慮）
 };
 
 // 月をまたぐ勤怠を、スタッフ×JST日付で集計する。
 // 打刻イベント方式（clock_in / clock_out の行）から、各日の最初の出勤〜最後の退勤で実働を出す。
-function aggregate(punches: Punch[]): StaffSummary[] {
+function aggregate(punches: Punch[], rateMap: Map<string, number>): StaffSummary[] {
   // user_id -> date -> { in?: ts, out?: ts, name }
   const byStaff = new Map<string, { name: string; days: Map<string, { in?: string; out?: string }> }>();
 
@@ -50,7 +52,9 @@ function aggregate(punches: Punch[]): StaffSummary[] {
         missingClockOut += 1;
       }
     }
-    rows.push({ user_id, staff_name: staff.name, days, totalMinutes, missingClockOut });
+    const hourlyRate = rateMap.get(user_id) ?? null;
+    const estimatedPay = hourlyRate != null ? Math.round((totalMinutes / 60) * hourlyRate) : null;
+    rows.push({ user_id, staff_name: staff.name, days, totalMinutes, missingClockOut, hourlyRate, estimatedPay });
   }
   rows.sort((a, b) => a.staff_name.localeCompare(b.staff_name, "ja"));
   return rows;
@@ -75,21 +79,43 @@ export async function GET(req: NextRequest) {
 
     const { start, end } = jstMonthBounds(month);
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from("attendance")
-      .select("user_id, user_name, type, timestamp")
-      .eq("company_id", ctx.companyId)
-      .gte("timestamp", start)
-      .lt("timestamp", end)
-      .order("timestamp", { ascending: true });
+    const [{ data, error }, { data: assignments }] = await Promise.all([
+      supabase
+        .from("attendance")
+        .select("user_id, user_name, type, timestamp")
+        .eq("company_id", ctx.companyId)
+        .gte("timestamp", start)
+        .lt("timestamp", end)
+        .order("timestamp", { ascending: true }),
+      supabase
+        .from("assignments")
+        .select("user_id, hourly_rate, start_date")
+        .eq("company_id", ctx.companyId)
+        .not("hourly_rate", "is", null)
+        .order("start_date", { ascending: false }),
+    ]);
     if (error) throw error;
 
-    const summary = aggregate((data ?? []) as Punch[]);
+    // スタッフごとの時給：時給が入った契約のうち最新の開始日のものを採用（概算用）
+    const rateMap = new Map<string, number>();
+    for (const a of assignments ?? []) {
+      if (a.hourly_rate != null && !rateMap.has(a.user_id)) rateMap.set(a.user_id, Number(a.hourly_rate));
+    }
+
+    const summary = aggregate((data ?? []) as Punch[], rateMap);
 
     if (format === "csv") {
-      const header = ["スタッフ", "出勤日数", "実働時間(H:MM)", "実働分", "退勤打刻もれ"];
+      const header = ["スタッフ", "出勤日数", "実働時間(H:MM)", "実働分", "時給", "概算支給額", "退勤打刻もれ"];
       const lines = summary.map((s) =>
-        [s.staff_name, s.days, minutesToHm(s.totalMinutes), s.totalMinutes, s.missingClockOut].join(",")
+        [
+          s.staff_name,
+          s.days,
+          minutesToHm(s.totalMinutes),
+          s.totalMinutes,
+          s.hourlyRate ?? "",
+          s.estimatedPay ?? "",
+          s.missingClockOut,
+        ].join(",")
       );
       // Excel(日本語)向けにBOMを付与
       const csv = "﻿" + [header.join(","), ...lines].join("\r\n") + "\r\n";

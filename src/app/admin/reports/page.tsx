@@ -12,6 +12,8 @@ type Row = {
   totalMinutes: number;
   totalHm: string;
   missingClockOut: number;
+  hourlyRate: number | null;
+  estimatedPay: number | null;
 };
 
 function thisMonth(): string {
@@ -78,6 +80,8 @@ export default function ReportsPage() {
   const totalDays = rows.reduce((s, r) => s + r.days, 0);
   const totalMin = rows.reduce((s, r) => s + r.totalMinutes, 0);
   const totalMissing = rows.reduce((s, r) => s + r.missingClockOut, 0);
+  const totalPay = rows.reduce((s, r) => s + (r.estimatedPay ?? 0), 0);
+  const yen = (n: number) => `¥${n.toLocaleString()}`;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -137,10 +141,11 @@ export default function ReportsPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <SummaryCard label="対象スタッフ" value={`${rows.length}名`} />
               <SummaryCard label="延べ出勤日数" value={`${totalDays}日`} />
               <SummaryCard label="実働合計" value={`${Math.floor(totalMin / 60)}時間`} />
+              <SummaryCard label="概算支給額" value={yen(totalPay)} accent />
             </div>
 
             <div className="bg-white rounded-2xl shadow overflow-hidden">
@@ -151,6 +156,8 @@ export default function ReportsPage() {
                       <th className="text-left font-semibold px-4 py-3">スタッフ</th>
                       <th className="text-right font-semibold px-4 py-3">出勤日数</th>
                       <th className="text-right font-semibold px-4 py-3">実働時間</th>
+                      <th className="text-right font-semibold px-4 py-3">時給</th>
+                      <th className="text-right font-semibold px-4 py-3">概算支給額</th>
                       <th className="text-right font-semibold px-4 py-3">打刻もれ</th>
                     </tr>
                   </thead>
@@ -160,6 +167,12 @@ export default function ReportsPage() {
                         <td className="px-4 py-3 font-semibold text-gray-800">{r.staff_name}</td>
                         <td className="px-4 py-3 text-right text-gray-600">{r.days}日</td>
                         <td className="px-4 py-3 text-right font-mono text-gray-800">{r.totalHm}</td>
+                        <td className="px-4 py-3 text-right text-gray-500">
+                          {r.hourlyRate != null ? `¥${r.hourlyRate.toLocaleString()}` : <span className="text-gray-300">未設定</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-gray-800">
+                          {r.estimatedPay != null ? yen(r.estimatedPay) : <span className="text-gray-300 font-normal">-</span>}
+                        </td>
                         <td className="px-4 py-3 text-right">
                           {r.missingClockOut > 0 ? (
                             <span className="text-amber-600 font-bold">{r.missingClockOut}</span>
@@ -174,7 +187,8 @@ export default function ReportsPage() {
               </div>
             </div>
             <p className="text-xs text-gray-400">
-              ※ 実働時間は各日の最初の出勤打刻〜最後の退勤打刻から算出（休憩は未考慮）。給与計算の一次集計としてご利用ください。
+              ※ 実働時間は各日の最初の出勤打刻〜最後の退勤打刻から算出。概算支給額は「実働時間 × 契約の時給」で、
+              <span className="font-semibold">休憩控除・残業割増・深夜手当は未考慮</span>です。給与計算の一次集計としてご利用ください。
             </p>
           </>
         )}
@@ -183,11 +197,11 @@ export default function ReportsPage() {
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="bg-white rounded-2xl shadow p-4">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-xl font-bold text-gray-800 mt-1">{value}</p>
+    <div className={`rounded-2xl shadow p-4 ${accent ? "bg-[#06C755] text-white" : "bg-white"}`}>
+      <p className={`text-xs ${accent ? "text-green-100" : "text-gray-400"}`}>{label}</p>
+      <p className={`text-xl font-bold mt-1 ${accent ? "text-white" : "text-gray-800"}`}>{value}</p>
     </div>
   );
 }
