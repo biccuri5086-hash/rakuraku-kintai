@@ -9,8 +9,11 @@ type Row = {
   user_id: string;
   staff_name: string;
   days: number;
+  grossMinutes: number;
+  breakMinutes: number;
   totalMinutes: number;
   totalHm: string;
+  grossHm: string;
   missingClockOut: number;
   hourlyRate: number | null;
   estimatedPay: number | null;
@@ -155,6 +158,7 @@ export default function ReportsPage() {
                     <tr className="bg-gray-50 text-gray-500 text-xs">
                       <th className="text-left font-semibold px-4 py-3">スタッフ</th>
                       <th className="text-right font-semibold px-4 py-3">出勤日数</th>
+                      <th className="text-right font-semibold px-4 py-3">休憩</th>
                       <th className="text-right font-semibold px-4 py-3">実働時間</th>
                       <th className="text-right font-semibold px-4 py-3">時給</th>
                       <th className="text-right font-semibold px-4 py-3">概算支給額</th>
@@ -166,7 +170,10 @@ export default function ReportsPage() {
                       <tr key={r.user_id} className="border-t border-gray-50">
                         <td className="px-4 py-3 font-semibold text-gray-800">{r.staff_name}</td>
                         <td className="px-4 py-3 text-right text-gray-600">{r.days}日</td>
-                        <td className="px-4 py-3 text-right font-mono text-gray-800">{r.totalHm}</td>
+                        <td className="px-4 py-3 text-right text-gray-400">
+                          {r.breakMinutes > 0 ? `${r.breakMinutes}分` : <span className="text-gray-300">-</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-gray-800" title={`拘束 ${r.grossHm}`}>{r.totalHm}</td>
                         <td className="px-4 py-3 text-right text-gray-500">
                           {r.hourlyRate != null ? `¥${r.hourlyRate.toLocaleString()}` : <span className="text-gray-300">未設定</span>}
                         </td>
@@ -187,8 +194,9 @@ export default function ReportsPage() {
               </div>
             </div>
             <p className="text-xs text-gray-400">
-              ※ 実働時間は各日の最初の出勤打刻〜最後の退勤打刻から算出。概算支給額は「実働時間 × 契約の時給」で、
-              <span className="font-semibold">休憩控除・残業割増・深夜手当は未考慮</span>です。給与計算の一次集計としてご利用ください。
+              ※ 実働時間 =（最初の出勤〜最後の退勤の拘束時間）− 休憩。休憩はシフトに登録があればその分、無ければ
+              <span className="font-semibold">労基法の最低基準（6h超45分／8h超60分）</span>を自動控除します。
+              概算支給額は「実働時間 × 契約の時給」で、<span className="font-semibold">残業割増・深夜手当は未考慮</span>です。
             </p>
           </>
         )}
