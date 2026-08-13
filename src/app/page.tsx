@@ -40,6 +40,7 @@ export default function HomePage() {
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "done">("idle");
   const [tapped, setTapped] = useState(false);
   const [clockInDone, setClockInDone] = useState(false);
+  const [doneType, setDoneType] = useState<"in" | "out">("in");
   const [features, setFeatures] = useState<Features>({ feature_condition: true, feature_gps: true });
   const [companyName, setCompanyName] = useState<string | null>(null);
 
@@ -96,7 +97,9 @@ export default function HomePage() {
     const data = await res.json();
 
     if (data.ok) {
+      setTapped((v) => !v); // 打刻後に当日データを再取得
       if (type === "clock_in") {
+        // 出勤：GPSで就業場所を記録。コンディションは聞かない（退勤時に聞く）。
         if (features.feature_gps && navigator.geolocation) {
           setGpsStatus("acquiring");
           navigator.geolocation.getCurrentPosition(
@@ -116,14 +119,18 @@ export default function HomePage() {
             { timeout: 10000, maximumAge: 0 }
           );
         }
+        setDoneType("in");
+        setClockInDone(true);
+        setTimeout(() => setClockInDone(false), 2500);
+      } else {
+        // 退勤：ここでコンディション（体調）を聞く。
+        setDoneType("out");
         setClockInDone(true);
         if (features.feature_condition) {
           setTimeout(() => router.push("/condition"), 3000);
         } else {
-          setTimeout(() => setClockInDone(false), 3000);
+          setTimeout(() => setClockInDone(false), 2500);
         }
-      } else {
-        setTapped((v) => !v);
       }
     }
     setLoading(false);
@@ -145,8 +152,12 @@ export default function HomePage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-[#06C755]">
         <CheckCircle size={72} className="text-white animate-bounce" />
-        <p className="text-white text-2xl font-bold">出勤しました！</p>
-        <p className="text-green-100 text-sm">コンディションを教えてください...</p>
+        <p className="text-white text-2xl font-bold">
+          {doneType === "in" ? "出勤しました！" : "退勤しました！"}
+        </p>
+        {doneType === "out" && features.feature_condition && (
+          <p className="text-green-100 text-sm">コンディションを教えてください...</p>
+        )}
       </div>
     );
   }
