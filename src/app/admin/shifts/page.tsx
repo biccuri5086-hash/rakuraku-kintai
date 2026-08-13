@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Plus, LogOut, Trash2 } from "lucide-react";
+import { CalendarClock, Plus, LogOut, Trash2, Pencil } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type Assignment = {
@@ -41,6 +41,7 @@ export default function ShiftsPage() {
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -90,19 +91,33 @@ export default function ShiftsPage() {
     setSaving(true);
     setError(null);
     const res = await fetch("/api/admin/shifts", {
-      method: "POST",
+      method: editingId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(editingId ? { ...form, id: editingId } : form),
     });
     const data = await res.json().catch(() => ({ ok: false }));
     setSaving(false);
     if (!data.ok) {
-      setError(data.message ?? "登録に失敗しました");
+      setError(data.message ?? "保存に失敗しました");
       return;
     }
     setForm({ ...EMPTY });
     setShowForm(false);
+    setEditingId(null);
     fetchAll();
+  };
+
+  const startEdit = (sh: Shift) => {
+    setForm({
+      assignment_id: sh.assignment_id,
+      work_date: sh.work_date,
+      start_time: sh.start_time ?? "",
+      end_time: sh.end_time ?? "",
+      break_minutes: String(sh.break_minutes ?? ""),
+    });
+    setEditingId(sh.id);
+    setShowForm(true);
+    setError(null);
   };
 
   const handleDelete = async (id: string, date: string) => {
@@ -154,6 +169,8 @@ export default function ShiftsPage() {
           </h2>
           <button
             onClick={() => {
+              setEditingId(null);
+              setForm({ ...EMPTY });
               setShowForm((v) => !v);
               setError(null);
             }}
@@ -234,12 +251,13 @@ export default function ShiftsPage() {
                 disabled={saving}
                 className="flex-1 bg-[#06C755] text-white font-bold py-2.5 rounded-lg hover:bg-[#05b34c] disabled:opacity-60 transition-colors"
               >
-                {saving ? "登録中..." : "シフトを登録する"}
+                {saving ? "保存中..." : editingId ? "シフトを更新する" : "シフトを登録する"}
               </button>
               <button
                 onClick={() => {
                   setShowForm(false);
                   setForm({ ...EMPTY });
+                  setEditingId(null);
                   setError(null);
                 }}
                 className="px-4 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
@@ -269,6 +287,13 @@ export default function ShiftsPage() {
                     <span className="font-bold text-gray-800">{sh.work_date}</span>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                      <button
+                        onClick={() => startEdit(sh)}
+                        title="編集"
+                        className="text-gray-300 hover:text-[#06C755] transition-colors"
+                      >
+                        <Pencil size={16} />
+                      </button>
                       <button
                         onClick={() => handleDelete(sh.id, sh.work_date)}
                         title="削除"

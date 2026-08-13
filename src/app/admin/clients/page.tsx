@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Plus, MapPin, Phone, LogOut, Trash2 } from "lucide-react";
+import { Building2, Plus, MapPin, Phone, LogOut, Trash2, Pencil } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type Client = {
@@ -28,6 +28,7 @@ export default function ClientsPage() {
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -67,19 +68,33 @@ export default function ClientsPage() {
     setSaving(true);
     setError(null);
     const res = await fetch("/api/admin/clients", {
-      method: "POST",
+      method: editingId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(editingId ? { ...form, id: editingId } : form),
     });
     const data = await res.json().catch(() => ({ ok: false }));
     setSaving(false);
     if (!data.ok) {
-      setError(data.message ?? "登録に失敗しました");
+      setError(data.message ?? "保存に失敗しました");
       return;
     }
     setForm({ ...EMPTY });
     setShowForm(false);
+    setEditingId(null);
     fetchClients();
+  };
+
+  const startEdit = (c: Client) => {
+    setForm({
+      name: c.name,
+      workplace_name: c.workplace_name ?? "",
+      address: c.address ?? "",
+      contact_name: c.contact_name ?? "",
+      contact_phone: c.contact_phone ?? "",
+    });
+    setEditingId(c.id);
+    setShowForm(true);
+    setError(null);
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -129,6 +144,8 @@ export default function ClientsPage() {
           </h2>
           <button
             onClick={() => {
+              setEditingId(null);
+              setForm({ ...EMPTY });
               setShowForm((v) => !v);
               setError(null);
             }}
@@ -154,12 +171,13 @@ export default function ClientsPage() {
                 disabled={saving}
                 className="flex-1 bg-[#06C755] text-white font-bold py-2.5 rounded-lg hover:bg-[#05b34c] disabled:opacity-60 transition-colors"
               >
-                {saving ? "登録中..." : "登録する"}
+                {saving ? "保存中..." : editingId ? "更新する" : "登録する"}
               </button>
               <button
                 onClick={() => {
                   setShowForm(false);
                   setForm({ ...EMPTY });
+                  setEditingId(null);
                   setError(null);
                 }}
                 className="px-4 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
@@ -195,6 +213,13 @@ export default function ClientsPage() {
                         抵触日 {c.teishokubi}
                       </span>
                     )}
+                    <button
+                      onClick={() => startEdit(c)}
+                      title="編集"
+                      className="text-gray-300 hover:text-[#06C755] transition-colors"
+                    >
+                      <Pencil size={16} />
+                    </button>
                     <button
                       onClick={() => handleDelete(c.id, c.name)}
                       title="削除"

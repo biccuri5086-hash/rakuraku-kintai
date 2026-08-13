@@ -61,6 +61,31 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// 派遣先の編集
+export async function PATCH(req: NextRequest) {
+  try {
+    const ctx = await getTenantContext();
+    if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
+    const body = await req.json().catch(() => ({}));
+    const id = String(body?.id ?? "").trim();
+    const name = String(body?.name ?? "").trim();
+    if (!id || !name) return NextResponse.json({ ok: false, message: "派遣先名は必須です" }, { status: 400 });
+    const clean = (v: unknown) => { const s = String(v ?? "").trim(); return s.length > 0 ? s : null; };
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("clients").update({
+      name,
+      workplace_name: clean(body?.workplace_name),
+      address: clean(body?.address),
+      contact_name: clean(body?.contact_name),
+      contact_phone: clean(body?.contact_phone),
+    }).eq("id", id).eq("company_id", ctx.companyId);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
 // 派遣先の削除（紐づく契約・シフトはDBのcascadeで一緒に消える）
 export async function DELETE(req: NextRequest) {
   try {

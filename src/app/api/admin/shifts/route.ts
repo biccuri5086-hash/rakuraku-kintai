@@ -76,6 +76,29 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// シフトの編集
+export async function PATCH(req: NextRequest) {
+  try {
+    const ctx = await getTenantContext();
+    if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
+    const body = await req.json().catch(() => ({}));
+    const id = String(body?.id ?? "").trim();
+    const work_date = String(body?.work_date ?? "").trim();
+    if (!id || !work_date) return NextResponse.json({ ok: false, message: "勤務日は必須です" }, { status: 400 });
+    const t = (v: unknown) => { const s = String(v ?? "").trim(); return /^\d{2}:\d{2}$/.test(s) ? s : null; };
+    const rawBreak = String(body?.break_minutes ?? "").trim();
+    const break_minutes = rawBreak && /^\d+$/.test(rawBreak) ? Number(rawBreak) : 0;
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("shifts").update({
+      work_date, start_time: t(body?.start_time), end_time: t(body?.end_time), break_minutes,
+    }).eq("id", id).eq("company_id", ctx.companyId);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
 // シフトの削除
 export async function DELETE(req: NextRequest) {
   try {

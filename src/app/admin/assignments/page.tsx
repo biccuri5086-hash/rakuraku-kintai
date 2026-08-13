@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, LogOut, ArrowRight, Trash2 } from "lucide-react";
+import { FileText, Plus, LogOut, ArrowRight, Trash2, Pencil } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type StaffOption = { user_id: string; name: string };
@@ -43,6 +43,7 @@ export default function AssignmentsPage() {
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -88,19 +89,35 @@ export default function AssignmentsPage() {
     setSaving(true);
     setError(null);
     const res = await fetch("/api/admin/assignments", {
-      method: "POST",
+      method: editingId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(editingId ? { ...form, id: editingId } : form),
     });
     const data = await res.json().catch(() => ({ ok: false }));
     setSaving(false);
     if (!data.ok) {
-      setError(data.message ?? "登録に失敗しました");
+      setError(data.message ?? "保存に失敗しました");
       return;
     }
     setForm({ ...EMPTY });
     setShowForm(false);
+    setEditingId(null);
     fetchAll();
+  };
+
+  const startEdit = (a: Assignment) => {
+    setForm({
+      user_id: a.user_id,
+      client_id: a.client_id,
+      type: a.type,
+      start_date: a.start_date,
+      end_date: a.end_date ?? "",
+      job_content: a.job_content ?? "",
+      hourly_rate: a.hourly_rate != null ? String(a.hourly_rate) : "",
+    });
+    setEditingId(a.id);
+    setShowForm(true);
+    setError(null);
   };
 
   const handleDelete = async (id: string, label: string) => {
@@ -152,6 +169,8 @@ export default function AssignmentsPage() {
           </h2>
           <button
             onClick={() => {
+              setEditingId(null);
+              setForm({ ...EMPTY });
               setShowForm((v) => !v);
               setError(null);
             }}
@@ -212,12 +231,13 @@ export default function AssignmentsPage() {
                 disabled={saving}
                 className="flex-1 bg-[#06C755] text-white font-bold py-2.5 rounded-lg hover:bg-[#05b34c] disabled:opacity-60 transition-colors"
               >
-                {saving ? "登録中..." : "契約を登録する"}
+                {saving ? "保存中..." : editingId ? "契約を更新する" : "契約を登録する"}
               </button>
               <button
                 onClick={() => {
                   setShowForm(false);
                   setForm({ ...EMPTY });
+                  setEditingId(null);
                   setError(null);
                 }}
                 className="px-4 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
@@ -254,13 +274,22 @@ export default function AssignmentsPage() {
                       {a.type === "ongoing" ? "中長期" : "単発"}
                     </span>
                   </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => startEdit(a)}
+                    title="編集"
+                    className="text-gray-300 hover:text-[#06C755] transition-colors"
+                  >
+                    <Pencil size={16} />
+                  </button>
                   <button
                     onClick={() => handleDelete(a.id, `${a.staff_name} → ${a.client_name}`)}
                     title="削除"
-                    className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
+                    className="text-gray-300 hover:text-red-500 transition-colors"
                   >
                     <Trash2 size={16} />
                   </button>
+                  </div>
                 </div>
                 <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1">
                   <span>

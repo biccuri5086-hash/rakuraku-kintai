@@ -85,6 +85,35 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// 契約の編集
+export async function PATCH(req: NextRequest) {
+  try {
+    const ctx = await getTenantContext();
+    if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
+    const body = await req.json().catch(() => ({}));
+    const id = String(body?.id ?? "").trim();
+    const user_id = String(body?.user_id ?? "").trim();
+    const client_id = String(body?.client_id ?? "").trim();
+    const start_date = String(body?.start_date ?? "").trim();
+    if (!id || !user_id || !client_id || !start_date) {
+      return NextResponse.json({ ok: false, message: "スタッフ・派遣先・開始日は必須です" }, { status: 400 });
+    }
+    const type = body?.type === "ongoing" ? "ongoing" : "spot";
+    const end_date = String(body?.end_date ?? "").trim() || null;
+    const job_content = String(body?.job_content ?? "").trim() || null;
+    const rawRate = String(body?.hourly_rate ?? "").trim();
+    const hourly_rate = rawRate && /^\d+$/.test(rawRate) ? Number(rawRate) : null;
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("assignments").update({
+      user_id, client_id, type, start_date, end_date, job_content, hourly_rate,
+    }).eq("id", id).eq("company_id", ctx.companyId);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
 // 契約の削除（紐づくシフトはcascadeで一緒に消える）
 export async function DELETE(req: NextRequest) {
   try {
