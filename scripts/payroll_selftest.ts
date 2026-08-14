@@ -1,0 +1,77 @@
+// Phase B 給与集計ロジックの自己テスト（純粋関数の数値検証）。
+// このプロジェクトにはテストランナーが無いため、tsc でコンパイルして node で実行する簡易スペック。
+//
+// 実行方法（node_modules 未使用でも可）：
+//   tsc src/lib/payroll/*.ts scripts/payroll_selftest.ts \
+//     --outDir /tmp/pbout --module commonjs --target es2020 \
+//     --moduleResolution node --strict --esModuleInterop --ignoreDeprecations 6.0
+//   node /tmp/pbout/payroll_selftest.js
+// （tsconfig を無視するため、tsconfig の無いディレクトリから絶対パスで実行してもよい）
+
+import { aggregatePayroll } from "../src/lib/payroll/aggregate";
+import { DEFAULT_PAYROLL_SETTINGS } from "../src/lib/payroll/settings";
+import { jstDowOfDate } from "../src/lib/payroll/time";
+import { PunchEvent } from "../src/lib/payroll/types";
+
+let failed = 0;
+function eq(name: string, got: unknown, want: unknown) {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  if (!ok) { failed++; console.log(`FAIL ${name}: got ${JSON.stringify(got)} want ${JSON.stringify(want)}`); }
+  else console.log(`ok   ${name}`);
+}
+const P = (u: string, t: string, ts: string): PunchEvent => ({ user_id: u, user_name: u, type: t, timestamp: ts });
+const S = DEFAULT_PAYROLL_SETTINGS;
+const rate = new Map([["u", 1000]]);
+const one = (ps: PunchEvent[]) => aggregatePayroll({ punches: ps, settings: S, hourlyRateByUser: rate })[0];
+
+// 平日9:00-18:00（拘束540分・みなし休憩60→実働480）
+{
+  const r = one([P("u", "clock_in", "2026-08-13T09:00:00+09:00"), P("u", "clock_out", "2026-08-13T18:00:00+09:00")]);
+  eq("weekday grossMin", r.grossMin, 540);
+  eq("weekday breakMin", r.breakMin, 60);
+  eq("weekday workMin", r.workMin, 480);
+  eq("weekday overtime", r.overtimeMin, 0);
+  eq("weekday estPay", r.estimatedPay, 8000);
+}
+// 残業：9:00-20:00（拘束660・休憩60→実働600、8h超120が残業）
+{
+  const r = one([P("u", "clock_in", "2026-08-13T09:00:00+09:00"), P("u", "clock_out", "2026-08-13T20:00:00+09:00")]);
+  eq("ot workMin", r.workMin, 480);
+  eq("ot overtimeMin", r.overtimeMin, 120);
+  eq("ot estPay", r.estimatedPay, 10500); // 480*1.0 + 120*1.25 = 630分相当
+}
+// 深夜（日跨ぎ）：21:00-翌0:00（拘束180・休憩0→実働180、深夜22-24=120）
+{
+  const r = one([P("u", "clock_in", "2026-08-13T21:00:00+09:00"), P("u", "clock_out", "2026-08-14T00:00:00+09:00")]);
+  eq("night workMin", r.workMin, 180);
+  eq("night nightMin", r.nightMin, 120);
+  eq("night estPay", r.estimatedPay, 3500); // 180*1.0 + 120*0.25
+}
+// 打刻漏れ（退勤なし）→ 締め対象外・要確認
+{
+  const r = one([P("u", "clock_in", "2026-08-13T09:00:00+09:00")]);
+  eq("missing needsReview", r.needsReview, true);
+  eq("missing paidMin", r.paidMin, 0);
+  eq("missing flags", r.entries[0].flags, ["missing_punch", "needs_review"]);
+}
+// 法定休日（日曜・weekly_fixed）→ 全額 holiday
+{
+  eq("2026-08-16 is Sunday", jstDowOfDate("2026-08-16"), 0);
+  const r = one([P("u", "clock_in", "2026-08-16T09:00:00+09:00"), P("u", "clock_out", "2026-08-16T18:00:00+09:00")]);
+  eq("holiday holidayMin", r.holidayMin, 480);
+  eq("holiday workMin", r.workMin, 0);
+  eq("holiday estPay", r.estimatedPay, 10800); // 480*1.35
+}
+// 週40h超：月-土 各8h実働（480×6=2880）→ 480分が残業へ
+{
+  const ps: PunchEvent[] = [];
+  for (const day of ["2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15"]) {
+    ps.push(P("u", "clock_in", `${day}T09:00:00+09:00`), P("u", "clock_out", `${day}T18:00:00+09:00`));
+  }
+  const r = one(ps);
+  eq("week40 workMin", r.workMin, 2400);
+  eq("week40 overtimeMin", r.overtimeMin, 480);
+}
+
+console.log(failed === 0 ? "\nALL PASS" : `\n${failed} FAILED`);
+if (failed) process.exit(1);
