@@ -59,24 +59,47 @@ RLS 方針：全テーブル service_role のみ（Next.js サーバー経由）
 - 休日（法定休日）割増
 > ※ 割増率・週の起算曜日・端数丸めは会社設定（下記 `company_payroll_settings`）で持つ。
 
+### 3.1 休日の判定（モード切替・負担最小）
+
+割増は「その日が休みか」ではなく **法定休日労働（1.35）か／時間外（1.25）か** で決まる。
+会社ごとに **休日モード** を切り替える。**スタッフは休日を入力しない**（シフトの有無で判定）。
+
+**モードA：`weekly_fixed`（曜日固定・土日休み等）**
+- 所定休日＝ `prescribed_off_dows`（複数曜日）／法定休日＝ `statutory_holiday_dow`（既定：日曜）
+- その曜日に勤務 → 法定休日なら 1.35、所定休日なら時間外(1.25/40h超)
+
+**モードB：`shift`（シフト休み・サービス業向け）**
+- 所定休日＝**シフト未割当日（自動）**。スタッフ・管理者とも休日入力不要＝負担ゼロ
+- 法定休日の判定は次の2方式から会社が選ぶ（`shift_statutory_rule`）：
+  - `weekly_auto`（推奨・既定）：週（`week_start` 起算）の中で1日も休みが無ければ、その週の**7日目の勤務を法定休日労働(1.35)**とみなす。休みが1日でもあれば超過分は時間外(1.25)
+  - `fixed_dow`（簡易）：法定休日の曜日を1つだけ固定指定（`statutory_holiday_dow`）
+- どちらも**日々の休日指定は発生しない**（システムがシフトから自動算出）
+
 ---
 
 ## 4. データモデル追加案（すべて additive・未実行）
 
 > 既存を壊さない（`create table/add column if not exists`）。実行は承認＋ダブルチェック後。
 
-### 4.1 `company_payroll_settings`（会社ごとの集計ルール）
+### 4.1 `company_payroll_settings`（会社ごとの集計ルール・**管理者が設定**）
 | 列 | 型 | 用途 |
 |---|---|---|
 | company_id | uuid PK FK | テナント |
-| closing_day | int | 締め日（例：末日=31, 20日締=20） |
+| closing_day | int | **締め日（管理者設定）**。末日=31, 20日締=20 |
 | week_start | int default 1 | 週の起算（1=月） |
-| round_unit_min | int default 1 | 端数丸め単位（分） |
-| round_mode | text | up/down/nearest |
+| **holiday_mode** | text default 'weekly_fixed' | `weekly_fixed` / `shift` |
+| prescribed_off_dows | int[] | 所定休日の曜日（weekly_fixed用。例 {0,6}=日土） |
+| statutory_holiday_dow | int default 0 | 法定休日の曜日（0=日）。weekly_fixed／shiftのfixed_dowで使用 |
+| shift_statutory_rule | text default 'weekly_auto' | shift時の法定休日判定：`weekly_auto` / `fixed_dow` |
+| **round_unit_min** | int default 1 | 端数丸め単位。**1 / 5 / 15 / 60 のみ許可**（check制約） |
+| round_scope | text default 'month' | 丸め適用範囲（**month推奨**。dayは非推奨） |
+| round_mode | text default 'up' | up / nearest（**down一方向は避ける**） |
 | overtime_rate | numeric default 1.25 | 法定外割増 |
 | night_rate | numeric default 1.25 | 深夜割増 |
-| holiday_rate | numeric default 1.35 | 休日割増 |
+| holiday_rate | numeric default 1.35 | 法定休日割増 |
 | deemed_break_json | jsonb | 実働Nhで自動M分休憩などの規定 |
+
+> 丸めは労基法上「日ごと切り捨て」が賃金未払いリスク。既定は **1分集計 → 月合計に対して丸め（切上/四捨五入）**。
 
 ### 4.2 `timesheets`（月次締めヘッダ：ユーザー×月）
 | 列 | 型 | 用途 |
@@ -114,6 +137,11 @@ RLS：4テーブルとも service_role のみ（既存踏襲）。`updated_at` �
 ---
 
 ## 5. 出力仕様
+
+> **方針（確定）：フル給与計算ソフトは作らない。** 勤怠を締めて「実働・残業・深夜・休日の時間」を確定し、
+> 既存の給与ソフト（freee/マネフォ/奉行 等）に**渡す（連携）**に徹する。社会保険・源泉・住民税・年末調整・
+> 振込は作らない（法対応の維持コスト・リスクが本業から外れるため）。
+> 折衷として **概算給与額（時給×実働＋割増）** は管理者の確認用に表示する（正式な給与明細ではない）。
 
 ### 5.1 給与エクスポート（CSV）
 - **汎用CSV**（まず最優先）：`スタッフID, 氏名, 対象年月, 実働時間, 法定外残業, 深夜, 休日, 時給, 派遣先` 等
@@ -163,12 +191,19 @@ RLS：4テーブルとも service_role のみ（既存踏襲）。`updated_at` �
 
 ---
 
-## 9. オーナー確定事項（実装前に決める）
+## 9. オーナー確定事項
 
-1. **締め日**（末日／20日 など）と週の起算曜日
-2. **割増率**（法定外・深夜・休日）と端数丸めルール
+**確定済み（2026-08-14）**
+- ✅ **締め日**：管理者が会社ごとに設定可能（`closing_day`）
+- ✅ **休日**：`weekly_fixed`（土日等）を既定に、`shift`（シフト休み）へ切替可。スタッフは休日入力しない
+- ✅ **丸め単位**：1 / 5 / 15 / 60 分。1分集計→月合計に丸め（切上/四捨五入）を既定
+- ✅ **給与ソフト**：自作せず連携（まず汎用CSV）。概算表示のみ実装、正式計算はしない
+
+**残り（実装前に決める）**
+1. **shift時の法定休日判定**：`weekly_auto`（推奨）か `fixed_dow`（簡易）、どちらを既定にするか
+2. **割増率の数値**：法定外1.25 / 深夜1.25 / 休日1.35 でよいか（会社別に変更可にする前提）
 3. **打刻漏れの扱い**：予定で補完 or 管理者確認必須（推奨：確認必須）
-4. **対象の給与ソフト**（汎用CSVのみ／freee／MF／奉行 …）
-5. **みなし休憩**の規定有無
+4. **みなし休憩**の規定有無（例：実働6h超で45分自動控除）
+5. **連携先の初期対象**：汎用CSVのみで開始か、freee 等を最初から入れるか
 
 上記が固まり次第、B-1 の設計レビュー → マイグレーション案を ハヤト／ノア に回す。
