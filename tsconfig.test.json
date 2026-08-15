@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "incremental": false,
+    "types": ["node"],
+    "plugins": []
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "src/lib/payroll/**/*.ts",
+    "src/lib/compliance/**/*.ts",
+    "src/lib/billing/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".test-build"]
+}

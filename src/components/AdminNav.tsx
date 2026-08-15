@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Building2, FileText, CalendarClock, BarChart3, Wallet, ClipboardList, ShieldAlert } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, CalendarClock, BarChart3, Wallet, ClipboardList, ShieldAlert, CreditCard } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "ダッシュボード", icon: LayoutDashboard },
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/admin/payroll", label: "給与", icon: Wallet },
   { href: "/admin/client-report", label: "派遣先報告", icon: ClipboardList },
   { href: "/admin/compliance", label: "派遣法", icon: ShieldAlert },
+  { href: "/admin/billing", label: "プラン", icon: CreditCard },
 ];
 
 export default function AdminNav() {

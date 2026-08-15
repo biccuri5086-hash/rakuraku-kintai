@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit tests (payroll / compliance logic)
+        run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          # 本番の値は不要。ビルド時にサーバーコードは実行されないためプレースホルダで十分。
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: placeholder_service_role_key_for_ci_only
+          SESSION_SECRET: ci_placeholder_session_secret_1234567890
