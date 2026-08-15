@@ -2,6 +2,7 @@
 // テーブル未適用（PHASE_B_MIGRATION.sql 未実行）でも、読み取りは DEFAULT にフォールバックして動く。
 // 書き込み（保存）はテーブル適用後に有効になる。
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { PayrollSettings, RoundUnit } from "./types";
 import { DEFAULT_PAYROLL_SETTINGS } from "./settings";
 
@@ -116,20 +117,9 @@ export function validateFull(body: unknown): { ok: true; value: FullPayrollSetti
   };
 }
 
-// supabase クライアントのうち本関数が使う部分だけの構造的型（外部型に依存しない）
-type SupabaseLike = {
-  from: (table: string) => {
-    select: (q: string) => {
-      eq: (c: string, v: string) => {
-        maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
-      };
-    };
-  };
-};
-
 // 会社設定を読む。テーブル未適用・行なし・エラー時は DEFAULT にフォールバック（source で区別）。
 export async function loadFullSettings(
-  supabase: SupabaseLike,
+  supabase: SupabaseClient,
   companyId: string
 ): Promise<{ settings: FullPayrollSettings; source: "db" | "default" }> {
   try {
