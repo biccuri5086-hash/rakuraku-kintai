@@ -73,5 +73,28 @@ const one = (ps: PunchEvent[]) => aggregatePayroll({ punches: ps, settings: S, h
   eq("week40 overtimeMin", r.overtimeMin, 480);
 }
 
+// --- 派遣先報告 ---
+import { aggregateClientReport, ClientPunch } from "../src/lib/payroll/clientReport";
+{
+  const a2c = new Map([
+    ["a1", { clientId: "c1", clientName: "派遣先A" }],
+    ["a2", { clientId: "c2", clientName: "派遣先B" }],
+  ]);
+  const CP = (u: string, t: string, ts: string, a: string | null): ClientPunch => ({ user_id: u, user_name: u, type: t, timestamp: ts, assignment_id: a });
+  const ps: ClientPunch[] = [
+    CP("u", "clock_in", "2026-08-10T09:00:00+09:00", "a1"), CP("u", "clock_out", "2026-08-10T18:00:00+09:00", "a1"),
+    CP("u", "clock_in", "2026-08-11T09:00:00+09:00", "a2"), CP("u", "clock_out", "2026-08-11T18:00:00+09:00", "a2"),
+    CP("v", "clock_in", "2026-08-10T09:00:00+09:00", "a1"), CP("v", "clock_out", "2026-08-10T17:00:00+09:00", "a1"),
+  ];
+  const rows = aggregateClientReport(ps, a2c);
+  eq("client count", rows.length, 2);
+  const A = rows.find((r) => r.client_id === "c1")!;
+  eq("clientA totalDays", A.totalDays, 2);
+  eq("clientA totalGross", A.totalGrossMin, 540 + 480);
+  eq("clientA staff u days", A.staff.find((s) => s.user_id === "u")!.days, 1);
+  const B = rows.find((r) => r.client_id === "c2")!;
+  eq("clientB totalGross", B.totalGrossMin, 540);
+}
+
 console.log(failed === 0 ? "\nALL PASS" : `\n${failed} FAILED`);
 if (failed) process.exit(1);
