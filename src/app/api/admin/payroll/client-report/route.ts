@@ -60,6 +60,19 @@ export async function GET(req: NextRequest) {
     if (onlyClient) rows = rows.filter((r) => r.client_id === onlyClient);
 
     if (format === "csv") {
+      // 監査ログはベストエフォート（payroll_exports 未適用でもCSV出力は成功させる）
+      try {
+        await supabase.from("payroll_exports").insert({
+          company_id: ctx.companyId,
+          period_ym: month,
+          scope: "client_report",
+          format: "csv_generic",
+          row_count: rows.reduce((a, r) => a + r.staff.length, 0),
+          created_by: ctx.adminId,
+        });
+      } catch {
+        /* テーブル未適用時は無視 */
+      }
       const header = ["派遣先", "スタッフID", "氏名", "対象月", "就業日数", "就業時間(拘束・分)", "就業時間(H:MM)"];
       const lines: string[] = [];
       for (const r of rows) {

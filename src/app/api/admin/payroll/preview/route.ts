@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { jstMonthBounds, jstThisMonth } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { aggregatePayroll } from "@/lib/payroll/aggregate";
-import { DEFAULT_PAYROLL_SETTINGS } from "@/lib/payroll/settings";
+import { loadFullSettings } from "@/lib/payroll/companySettings";
 import type { PunchEvent } from "@/lib/payroll/types";
 
 // Phase B: 給与集計プレビュー（読み取り専用・マイグレーション不要）。
@@ -76,7 +76,8 @@ export async function GET(req: NextRequest) {
       shiftBreakByKey.set(key, (shiftBreakByKey.get(key) ?? 0) + Number(sh.break_minutes));
     }
 
-    const settings = DEFAULT_PAYROLL_SETTINGS; // TODO: company_payroll_settings 適用後に会社別設定を読む
+    // 会社設定を読む（company_payroll_settings 未適用ならデフォルトにフォールバック）
+    const { settings, source: settingsSource } = await loadFullSettings(supabase, ctx.companyId);
     const rows = aggregatePayroll({
       punches: (punches ?? []) as PunchEvent[],
       settings,
@@ -85,6 +86,19 @@ export async function GET(req: NextRequest) {
     });
 
     if (format === "csv") {
+      // 監査ログはベストエフォート（payroll_exports 未適用でもCSV出力は成功させる）
+      try {
+        await supabase.from("payroll_exports").insert({
+          company_id: ctx.companyId,
+          period_ym: month,
+          scope: "payroll",
+          format: "csv_generic",
+          row_count: rows.length,
+          created_by: ctx.adminId,
+        });
+      } catch {
+        /* テーブル未適用時は無視 */
+      }
       // 給与ソフトに繋ぎやすい形：1行=スタッフ×対象月、分を主に（時間は参考）
       const header = [
         "スタッフID", "氏名", "対象月",
@@ -135,7 +149,7 @@ export async function GET(req: NextRequest) {
       { workMin: 0, overtimeMin: 0, nightMin: 0, holidayMin: 0, estimatedPay: 0 }
     );
 
-    return NextResponse.json({ ok: true, month, settingsSource: "default", rows: view, totals });
+    return NextResponse.json({ ok: true, month, settingsSource, rows: view, totals });
   } catch (e) {
     return errorResponse(e);
   }

@@ -96,5 +96,33 @@ import { aggregateClientReport, ClientPunch } from "../src/lib/payroll/clientRep
   eq("clientB totalGross", B.totalGrossMin, 540);
 }
 
+// --- 会社設定の検証・往復マッピング ---
+import { validateFull, rowToFull, fullToRow, DEFAULT_FULL_SETTINGS } from "../src/lib/payroll/companySettings";
+{
+  // 不正: 丸め単位10はNG
+  const bad = validateFull({ ...toBody(DEFAULT_FULL_SETTINGS), roundUnitMin: 10 });
+  eq("validate reject unit10", bad.ok, false);
+  // 正常
+  const good = validateFull(toBody({ ...DEFAULT_FULL_SETTINGS, closingDay: 20, roundUnitMin: 15, holidayMode: "shift" }));
+  eq("validate ok", good.ok, true);
+  if (good.ok) {
+    eq("validate closingDay", good.value.closingDay, 20);
+    eq("validate unit", good.value.roundUnitMin, 15);
+    // 行への往復（row → full）
+    const row = fullToRow("co1", good.value);
+    const back = rowToFull(row);
+    eq("roundtrip unit", back.roundUnitMin, 15);
+    eq("roundtrip holidayMode", back.holidayMode, "shift");
+    eq("roundtrip closingDay", back.closingDay, 20);
+  }
+  // 未適用フォールバック相当：空行 → デフォルト
+  eq("empty row → default unit", rowToFull({}).roundUnitMin, DEFAULT_FULL_SETTINGS.roundUnitMin);
+}
+
 console.log(failed === 0 ? "\nALL PASS" : `\n${failed} FAILED`);
 if (failed) process.exit(1);
+
+// FullPayrollSettings → PUT body(JSON) 相当（camelCaseそのまま）
+function toBody(s: typeof DEFAULT_FULL_SETTINGS): Record<string, unknown> {
+  return { ...s };
+}

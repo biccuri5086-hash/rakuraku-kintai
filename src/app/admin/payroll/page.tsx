@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Wallet, LogOut, Download, AlertTriangle } from "lucide-react";
+import { Wallet, LogOut, Download, AlertTriangle, Settings, CheckCircle, Lock } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type Row = {
@@ -47,6 +47,10 @@ export default function PayrollPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [totals, setTotals] = useState<Totals | null>(null);
   const [loading, setLoading] = useState(true);
+  const [settingsSource, setSettingsSource] = useState<"db" | "default">("default");
+  const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -72,12 +76,40 @@ export default function PayrollPage() {
     const data = await res.json();
     setRows(data.ok ? data.rows : []);
     setTotals(data.ok ? data.totals : null);
+    setSettingsSource(data.ok ? data.settingsSource : "default");
     setLoading(false);
   }, [month, router]);
 
+  const fetchConfirmStatus = useCallback(async () => {
+    const res = await fetch(`/api/admin/payroll/confirm?month=${month}`, { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    setConfirmedAt(data.ok && data.available && data.confirmedCount > 0 ? data.confirmedAt : null);
+  }, [month]);
+
   useEffect(() => {
-    if (authed) fetchPreview();
-  }, [authed, fetchPreview]);
+    if (authed) {
+      fetchPreview();
+      fetchConfirmStatus();
+    }
+  }, [authed, fetchPreview, fetchConfirmStatus]);
+
+  const confirmMonth = async () => {
+    setConfirming(true);
+    setConfirmMsg(null);
+    const res = await fetch("/api/admin/payroll/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      setConfirmedAt(data.confirmedAt);
+      setConfirmMsg(`${data.confirmed}名分を締めました`);
+    } else {
+      setConfirmMsg(data.message ?? "締めに失敗しました");
+    }
+    setConfirming(false);
+  };
 
   const handleLogout = async () => {
     await fetch("/api/admin/logout", { method: "POST" });
@@ -124,6 +156,13 @@ export default function PayrollPage() {
             <Wallet size={18} className="text-[#06C755]" /> 給与集計プレビュー
           </h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/admin/payroll/settings")}
+              title="集計の設定（締め日・割増・丸め・休日）"
+              className="flex items-center gap-1 border border-gray-200 text-gray-500 text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Settings size={16} /> 設定
+            </button>
             <input
               type="month"
               value={month}
@@ -139,6 +178,40 @@ export default function PayrollPage() {
             </button>
           </div>
         </div>
+
+        <div className="flex items-center justify-between gap-2 flex-wrap bg-white rounded-xl shadow px-4 py-3">
+          <div className="text-sm text-gray-600 flex items-center gap-2">
+            {confirmedAt ? (
+              <>
+                <CheckCircle size={16} className="text-[#06C755]" />
+                <span>この月は<span className="font-bold text-gray-800">締め確定済み</span>（{new Date(confirmedAt).toLocaleString("ja-JP")}）</span>
+              </>
+            ) : (
+              <>
+                <Lock size={16} className="text-gray-400" />
+                <span>この月はまだ締めていません（下の集計は確認用のプレビューです）</span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {confirmMsg && <span className="text-xs text-gray-500">{confirmMsg}</span>}
+            <button
+              onClick={confirmMonth}
+              disabled={confirming || rows.length === 0}
+              className="flex items-center gap-1 bg-gray-800 text-white text-sm font-bold px-3 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              <CheckCircle size={16} /> {confirming ? "締め中..." : confirmedAt ? "再締め" : "この月を締める"}
+            </button>
+          </div>
+        </div>
+
+        {settingsSource === "default" && (
+          <p className="text-xs text-gray-400">
+            ※ 集計は初期設定（締め日=末日・法定休日=日曜・丸め1分など）で計算中です。
+            <button onClick={() => router.push("/admin/payroll/settings")} className="text-[#06C755] font-semibold underline underline-offset-2">設定</button>
+            から会社に合わせて変更できます。
+          </p>
+        )}
 
         {reviewCount > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
