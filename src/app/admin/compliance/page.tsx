@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldAlert, LogOut, Download, AlertTriangle, Clock, HelpCircle, Check, Building2, User } from "lucide-react";
+import { ShieldAlert, LogOut, Download, AlertTriangle, Clock, HelpCircle, Check, Building2, User, FileText } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type Level = "ok" | "warn" | "expired" | "unknown";
@@ -163,13 +163,24 @@ export default function CompliancePage() {
                         <span className="text-gray-300"> · {a.basis}</span>
                       </p>
                     </div>
-                    <button
-                      onClick={() => ack(a)}
-                      disabled={done}
-                      className={`flex-shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${done ? "bg-green-50 text-[#06C755]" : "bg-gray-800 text-white hover:bg-gray-700"}`}
-                    >
-                      {done ? "対応済み" : "対応記録"}
-                    </button>
+                    <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
+                      {a.scope === "office" && a.client_id && (
+                        <button
+                          onClick={() => window.open(`/api/admin/compliance/notice?client_id=${encodeURIComponent(a.client_id!)}`, "_blank")}
+                          className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                          title="この派遣先の抵触日通知書を作成（印刷/PDF）"
+                        >
+                          <FileText size={13} /> 通知書
+                        </button>
+                      )}
+                      <button
+                        onClick={() => ack(a)}
+                        disabled={done}
+                        className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${done ? "bg-green-50 text-[#06C755]" : "bg-gray-800 text-white hover:bg-gray-700"}`}
+                      >
+                        {done ? "対応済み" : "対応記録"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -223,8 +234,9 @@ export default function CompliancePage() {
 
         <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 text-xs text-gray-500 space-y-1">
           <p>※ 事業所抵触日は「延長後 ＞ 事業所抵触日（派遣先設定）＞ 受入開始日＋3年」の順で採用します。</p>
-          <p>※ 個人抵触日は「同一の派遣先・組織単位での中長期派遣の開始＋3年」で算出（クーリング期間は未考慮）。正確な運用は<span className="font-semibold">派遣先での受入開始日・組織単位</span>の登録で精度が上がります。</p>
-          <p>※「対応記録」は派遣法テーブル（PHASE_C_MIGRATION.sql）の適用後に保存されます。</p>
+          <p>※ 個人抵触日は「同一の派遣先・組織単位での中長期派遣の開始＋3年」で算出し、<span className="font-semibold">クーリング期間（3ヶ月超の空白でリセット）を考慮</span>します。精度は<span className="font-semibold">受入開始日・組織単位</span>の登録で上がります。</p>
+          <p>※ 事業所アラートの「通知書」から<span className="font-semibold">抵触日通知書（参考様式・印刷/PDF）</span>を作成できます。</p>
+          <p className="text-amber-600">※ 管理台帳(法37条)の法定記載事項のうち、<span className="font-semibold">無期/有期区分・派遣元/派遣先責任者・教育訓練/キャリコン・社保加入・労使協定対象</span>等は<span className="font-semibold">未対応</span>です（就業実績・抵触日のみ）。本番運用前に社労士確認を推奨。</p>
         </div>
       </main>
     </div>
