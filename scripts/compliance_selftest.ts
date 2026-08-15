@@ -3,7 +3,7 @@
 //   --module commonjs --target es2020 --moduleResolution node --strict --esModuleInterop --ignoreDeprecations 6.0
 //   && node /tmp/cout/scripts/compliance_selftest.js
 
-import { computeComplianceAlerts, buildLedger, addYears, daysUntil, officeLimit } from "../src/lib/compliance/alerts";
+import { computeComplianceAlerts, buildLedger, addYears, daysUntil, officeLimit, addMonths, individualLimitDate } from "../src/lib/compliance/alerts";
 import { ClientRec, AssignmentRec, StaffRec } from "../src/lib/compliance/types";
 
 let failed = 0;
@@ -47,6 +47,20 @@ eq("ledger rows", ledger.length, 2);
 const rowC1 = ledger.find((r) => r.client_name === "派遣先A")!;
 eq("ledger c1 individualLimit", rowC1.individualLimit, "2026-09-01");
 eq("ledger c1 officeLimit", rowC1.officeLimit, "2026-10-01");
+
+// --- クーリング期間（3ヶ月超の空白で通算リセット） ---
+eq("addMonths", addMonths("2020-06-30", 3), "2020-09-30");
+{
+  const A = (id: string, s: string, e: string | null): AssignmentRec => ({ id, user_id: "u", client_id: "c1", type: "ongoing", start_date: s, end_date: e });
+  // クーリング成立：2019終了 → 2024開始（空白>3ヶ月）→ 通算リセット、抵触日=2024+3年
+  const cool = individualLimitDate([A("a", "2019-01-01", "2019-03-31"), A("b", "2024-01-01", null)]);
+  eq("cooling start reset", cool?.start, "2024-01-01");
+  eq("cooling limit", cool?.limit, "2027-01-01");
+  // 非成立：2023-06-30終了 → 2023-08-01開始（空白1ヶ月）→ リセットなし、抵触日=2023-01-01+3年
+  const cont = individualLimitDate([A("a", "2023-01-01", "2023-06-30"), A("b", "2023-08-01", null)]);
+  eq("no-cooling start", cont?.start, "2023-01-01");
+  eq("no-cooling limit", cont?.limit, "2026-01-01");
+}
 
 console.log(failed === 0 ? "\nALL PASS" : `\n${failed} FAILED`);
 if (failed) process.exit(1);

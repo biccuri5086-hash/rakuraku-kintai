@@ -18,6 +18,32 @@ export function addYears(date: string, n: number): string {
   return new Date(Date.UTC(y + n, m - 1, d)).toISOString().slice(0, 10);
 }
 
+// "YYYY-MM-DD" に n ヶ月加算
+export function addMonths(date: string, n: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + n, d)).toISOString().slice(0, 10);
+}
+
+// 個人単位の抵触日を、クーリング期間（3ヶ月超の空白で通算リセット）を考慮して算出する。
+// 同一(スタッフ×派遣先×組織単位)の ongoing 契約群を受け取り、現在の継続期間の開始 +3年 を返す。
+// 前の派遣の終了(end_date)から次の開始まで 3ヶ月を超える空白があれば、そこで通算がリセットされる。
+export function individualLimitDate(group: AssignmentRec[]): { start: string; limit: string } | null {
+  const sorted = [...group].filter((a) => a.type === "ongoing").sort((a, b) => a.start_date.localeCompare(b.start_date));
+  if (!sorted.length) return null;
+  let runStart = sorted[0].start_date;
+  let prevEnd: string | null = sorted[0].end_date ?? null;
+  for (let i = 1; i < sorted.length; i++) {
+    const a = sorted[i];
+    // 直前が終了日ありで、その3ヶ月後より後に次が始まる＝クーリング成立 → 通算リセット
+    if (prevEnd && a.start_date > addMonths(prevEnd, 3)) {
+      runStart = a.start_date;
+    }
+    // 終了日が無い（期間未定）契約の後は空白が生じないものとして扱う
+    prevEnd = a.end_date ? (prevEnd && prevEnd > a.end_date ? prevEnd : a.end_date) : null;
+  }
+  return { start: runStart, limit: addYears(runStart, 3) };
+}
+
 // target までの残り日数（today 基準、UTC日付差）
 export function daysUntil(target: string, today: string): number {
   const t = Date.parse(`${target}T00:00:00Z`);
@@ -82,17 +108,20 @@ export function computeComplianceAlerts(
     });
   }
 
-  // 個人単位：同一(スタッフ×派遣先×組織単位)の ongoing 最早開始日 +3年
-  const groups = new Map<string, { a: AssignmentRec; start: string }>();
+  // 個人単位：同一(スタッフ×派遣先×組織単位)の ongoing 群から、クーリング考慮の抵触日を算出
+  const groups = new Map<string, AssignmentRec[]>();
   for (const a of assignments) {
     if (a.type !== "ongoing" || !a.client_id) continue;
     const key = `${a.user_id}|${a.client_id}|${a.org_unit ?? ""}`;
-    const cur = groups.get(key);
-    if (!cur || a.start_date < cur.start) groups.set(key, { a, start: a.start_date });
+    const arr = groups.get(key);
+    if (arr) arr.push(a);
+    else groups.set(key, [a]);
   }
-  for (const { a, start } of groups.values()) {
-    const limit = addYears(start, 3);
-    const days = daysUntil(limit, today);
+  for (const g of groups.values()) {
+    const calc = individualLimitDate(g);
+    if (!calc) continue;
+    const a = g[0];
+    const days = daysUntil(calc.limit, today);
     alerts.push({
       scope: "individual",
       level: levelOf(days),
@@ -101,9 +130,9 @@ export function computeComplianceAlerts(
       staff_id: a.user_id,
       staff_name: staffName.get(a.user_id) ?? a.user_id,
       org_unit: a.org_unit ?? null,
-      limitDate: limit,
+      limitDate: calc.limit,
       daysRemaining: days,
-      basis: `派遣開始 ${start} +3年`,
+      basis: `派遣開始 ${calc.start} +3年（クーリング考慮）`,
     });
   }
 
@@ -119,19 +148,24 @@ export function buildLedger(
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const staffName = new Map(staff.map((s) => [s.user_id, s.display_name]));
 
-  // 個人抵触日（(スタッフ×派遣先×組織単位) の最早 ongoing 開始 +3年）
-  const earliest = new Map<string, string>();
+  // 個人抵触日（(スタッフ×派遣先×組織単位) 群からクーリング考慮で算出）
+  const groups = new Map<string, AssignmentRec[]>();
   for (const a of assignments) {
     if (a.type !== "ongoing" || !a.client_id) continue;
     const key = `${a.user_id}|${a.client_id}|${a.org_unit ?? ""}`;
-    const cur = earliest.get(key);
-    if (!cur || a.start_date < cur) earliest.set(key, a.start_date);
+    const arr = groups.get(key);
+    if (arr) arr.push(a);
+    else groups.set(key, [a]);
+  }
+  const limitByKey = new Map<string, string>();
+  for (const [key, g] of groups) {
+    const calc = individualLimitDate(g);
+    if (calc) limitByKey.set(key, calc.limit);
   }
 
   const rows: LedgerRow[] = assignments.map((a) => {
     const c = a.client_id ? clientById.get(a.client_id) : undefined;
     const key = `${a.user_id}|${a.client_id}|${a.org_unit ?? ""}`;
-    const indStart = a.type === "ongoing" ? earliest.get(key) : undefined;
     return {
       staff_id: a.user_id,
       staff_name: staffName.get(a.user_id) ?? a.user_id,
@@ -141,7 +175,7 @@ export function buildLedger(
       type: a.type,
       start_date: a.start_date,
       end_date: a.end_date ?? null,
-      individualLimit: indStart ? addYears(indStart, 3) : null,
+      individualLimit: a.type === "ongoing" ? limitByKey.get(key) ?? null : null,
       officeLimit: c ? officeLimit(c).date : null,
     };
   });

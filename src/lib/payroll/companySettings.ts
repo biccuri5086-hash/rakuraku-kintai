@@ -48,6 +48,7 @@ export function rowToFull(row: Record<string, unknown>): FullPayrollSettings {
     roundScope: row.round_scope === "day" ? "day" : "month",
     roundMode: row.round_mode === "nearest" ? "nearest" : "up",
     overtimeRate: num(row.overtime_rate, d.overtimeRate),
+    overtime60Rate: num(row.overtime60_rate, d.overtime60Rate),
     nightRate: num(row.night_rate, d.nightRate),
     holidayRate: num(row.holiday_rate, d.holidayRate),
     deemedBreaks: parseDeemed(row.deemed_break_json, d.deemedBreaks),
@@ -68,6 +69,7 @@ export function fullToRow(companyId: string, s: FullPayrollSettings): Record<str
     round_scope: s.roundScope,
     round_mode: s.roundMode,
     overtime_rate: s.overtimeRate,
+    overtime60_rate: s.overtime60Rate,
     night_rate: s.nightRate,
     holiday_rate: s.holidayRate,
     deemed_break_json: s.deemedBreaks,
@@ -94,8 +96,8 @@ export function validateFull(body: unknown): { ok: true; value: FullPayrollSetti
     const n = Number(v);
     return Number.isFinite(n) && n >= 1 && n <= 3 ? n : null;
   };
-  const ot = rate(b.overtimeRate), ni = rate(b.nightRate), ho = rate(b.holidayRate);
-  if (ot === null || ni === null || ho === null) return { ok: false, error: "割増率は 1.0〜3.0" };
+  const ot = rate(b.overtimeRate), ot60 = rate(b.overtime60Rate), ni = rate(b.nightRate), ho = rate(b.holidayRate);
+  if (ot === null || ot60 === null || ni === null || ho === null) return { ok: false, error: "割増率は 1.0〜3.0" };
 
   return {
     ok: true,
@@ -110,6 +112,7 @@ export function validateFull(body: unknown): { ok: true; value: FullPayrollSetti
       roundScope: b.roundScope,
       roundMode: b.roundMode,
       overtimeRate: ot,
+      overtime60Rate: ot60,
       nightRate: ni,
       holidayRate: ho,
       deemedBreaks: parseDeemed(b.deemedBreaks, DEFAULT_FULL_SETTINGS.deemedBreaks),

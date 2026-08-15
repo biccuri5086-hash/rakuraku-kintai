@@ -30,6 +30,7 @@ export interface PayrollSettings {
   roundScope: RoundScope;
   roundMode: RoundMode;
   overtimeRate: number; // 法定外割増（例 1.25）
+  overtime60Rate: number; // 月60時間超の時間外割増（例 1.50）
   nightRate: number; // 深夜割増（例 1.25）
   holidayRate: number; // 法定休日割増（例 1.35）
   deemedBreaks: DeemedBreakRule[];
@@ -58,7 +59,8 @@ export interface StaffPeriodResult {
   grossMin: number;
   breakMin: number;
   workMin: number;
-  overtimeMin: number;
+  overtimeMin: number; // 法定外残業の合計（60h超分を含む）
+  overtime60Min: number; // うち月60時間を超える分（割増率が高い）
   nightMin: number;
   holidayMin: number;
   paidMin: number; // work+overtime+holiday

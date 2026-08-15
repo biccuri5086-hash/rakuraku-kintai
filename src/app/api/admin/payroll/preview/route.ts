@@ -102,13 +102,13 @@ export async function GET(req: NextRequest) {
       // 給与ソフトに繋ぎやすい形：1行=スタッフ×対象月、分を主に（時間は参考）
       const header = [
         "スタッフID", "氏名", "対象月",
-        "実働(法定内)分", "残業分", "深夜分", "法定休日分", "支払対象分",
+        "実働(法定内)分", "残業分", "うち60h超分", "深夜分", "法定休日分", "支払対象分",
         "実働(H:MM)", "時給", "概算支給額", "要確認",
       ];
       const lines = rows.map((r) =>
         [
           r.user_id, r.staff_name, month,
-          r.workMin, r.overtimeMin, r.nightMin, r.holidayMin, r.paidMin,
+          r.workMin, r.overtimeMin, r.overtime60Min, r.nightMin, r.holidayMin, r.paidMin,
           minutesToHm(r.paidMin), r.hourlyRate ?? "", r.estimatedPay ?? "", r.needsReview ? "要確認" : "",
         ].join(",")
       );
@@ -129,6 +129,7 @@ export async function GET(req: NextRequest) {
       workedDays: r.workedDays,
       workMin: r.workMin,
       overtimeMin: r.overtimeMin,
+      overtime60Min: r.overtime60Min,
       nightMin: r.nightMin,
       holidayMin: r.holidayMin,
       paidMin: r.paidMin,

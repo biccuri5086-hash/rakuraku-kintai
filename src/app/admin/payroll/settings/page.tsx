@@ -17,6 +17,7 @@ type Form = {
   roundUnitMin: number;
   roundMode: "up" | "nearest";
   overtimeRate: number;
+  overtime60Rate: number;
   nightRate: number;
   holidayRate: number;
   break6h: number;
@@ -26,7 +27,7 @@ type Form = {
 const FALLBACK: Form = {
   closingDay: 31, weekStart: 1, holidayMode: "weekly_fixed", prescribedOffDows: [0, 6],
   statutoryHolidayDow: 0, shiftStatutoryRule: "weekly_auto", roundUnitMin: 1, roundMode: "up",
-  overtimeRate: 1.25, nightRate: 1.25, holidayRate: 1.35, break6h: 45, break8h: 60,
+  overtimeRate: 1.25, overtime60Rate: 1.5, nightRate: 1.25, holidayRate: 1.35, break6h: 45, break8h: 60,
 };
 
 export default function PayrollSettingsPage() {
@@ -62,7 +63,7 @@ export default function PayrollSettingsPage() {
         closingDay: s.closingDay, weekStart: s.weekStart, holidayMode: s.holidayMode,
         prescribedOffDows: s.prescribedOffDows ?? [0, 6], statutoryHolidayDow: s.statutoryHolidayDow,
         shiftStatutoryRule: s.shiftStatutoryRule, roundUnitMin: s.roundUnitMin, roundMode: s.roundMode,
-        overtimeRate: s.overtimeRate, nightRate: s.nightRate, holidayRate: s.holidayRate,
+        overtimeRate: s.overtimeRate, overtime60Rate: s.overtime60Rate ?? 1.5, nightRate: s.nightRate, holidayRate: s.holidayRate,
         break6h: s.deemedBreaks?.find((r: { over_min: number }) => r.over_min === 360)?.break_min ?? 45,
         break8h: s.deemedBreaks?.find((r: { over_min: number }) => r.over_min === 480)?.break_min ?? 60,
       });
@@ -81,7 +82,7 @@ export default function PayrollSettingsPage() {
       closingDay: form.closingDay, weekStart: form.weekStart, holidayMode: form.holidayMode,
       prescribedOffDows: form.prescribedOffDows, statutoryHolidayDow: form.statutoryHolidayDow,
       shiftStatutoryRule: form.shiftStatutoryRule, roundUnitMin: form.roundUnitMin, roundScope: "month",
-      roundMode: form.roundMode, overtimeRate: form.overtimeRate, nightRate: form.nightRate, holidayRate: form.holidayRate,
+      roundMode: form.roundMode, overtimeRate: form.overtimeRate, overtime60Rate: form.overtime60Rate, nightRate: form.nightRate, holidayRate: form.holidayRate,
       deemedBreaks: [{ over_min: 360, break_min: form.break6h }, { over_min: 480, break_min: form.break8h }],
     };
     const res = await fetch("/api/admin/payroll/settings", {
@@ -194,11 +195,13 @@ export default function PayrollSettingsPage() {
                 <Select value={form.roundMode} onChange={(v) => set("roundMode", v as Form["roundMode"])}
                   options={[{ v: "up", l: "切り上げ" }, { v: "nearest", l: "四捨五入" }]} />
               </Field>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Field label="残業割増"><input type="number" step={0.05} value={form.overtimeRate} onChange={(e) => set("overtimeRate", Number(e.target.value))} className={inputCls} /></Field>
+                <Field label="60h超残業"><input type="number" step={0.05} value={form.overtime60Rate} onChange={(e) => set("overtime60Rate", Number(e.target.value))} className={inputCls} /></Field>
                 <Field label="深夜割増"><input type="number" step={0.05} value={form.nightRate} onChange={(e) => set("nightRate", Number(e.target.value))} className={inputCls} /></Field>
                 <Field label="休日割増"><input type="number" step={0.05} value={form.holidayRate} onChange={(e) => set("holidayRate", Number(e.target.value))} className={inputCls} /></Field>
               </div>
+              <Hint>60h超残業＝月の時間外が60時間を超えた分の割増（既定1.5）。</Hint>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="みなし休憩 6h超（分）"><input type="number" min={0} value={form.break6h} onChange={(e) => set("break6h", Number(e.target.value))} className={inputCls} /></Field>
                 <Field label="みなし休憩 8h超（分）"><input type="number" min={0} value={form.break8h} onChange={(e) => set("break8h", Number(e.target.value))} className={inputCls} /></Field>

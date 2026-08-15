@@ -32,6 +32,7 @@ create table if not exists company_payroll_settings (
   round_mode             text not null default 'up'
                          check (round_mode in ('up','nearest')),  -- 切り捨て一方向は許可しない
   overtime_rate          numeric(4,2) not null default 1.25,
+  overtime60_rate        numeric(4,2) not null default 1.50,  -- 月60時間超の時間外
   night_rate             numeric(4,2) not null default 1.25,
   holiday_rate           numeric(4,2) not null default 1.35,
   -- みなし休憩：実働分の閾値→控除分。既定 6h超45分 / 8h超60分

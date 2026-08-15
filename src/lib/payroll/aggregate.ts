@@ -16,6 +16,7 @@ import { roundMinutes, deemedBreak } from "./settings";
 
 const DAILY_LEGAL_MIN = 480; // 8h
 const WEEKLY_LEGAL_MIN = 2400; // 40h
+const MONTHLY_OT60_MIN = 3600; // 月60時間（超過分は割増率が上がる）
 
 export interface AggregateInput {
   punches: PunchEvent[];
@@ -203,20 +204,28 @@ export function aggregatePayroll(input: AggregateInput): StaffPeriodResult[] {
       holidayMin = roundMinutes(holidayMin, settings.roundUnitMin, settings.roundMode);
     }
 
+    // 月60時間を超える時間外は割増率が上がる（overtimeMin の内数）
+    const overtime60Min = Math.max(0, overtimeMin - MONTHLY_OT60_MIN);
+    const overtimeBaseMin = overtimeMin - overtime60Min;
+
     const paidMin = workMin + overtimeMin + holidayMin;
     const rate = rateMap.get(user_id) ?? null;
-    // 概算：通常=1.0、残業=overtimeRate、法定休日=holidayRate、深夜は上乗せ(nightRate-1)
+    // 概算：通常=1.0、残業=overtimeRate、60h超残業=overtime60Rate、法定休日=holidayRate、深夜は上乗せ(nightRate-1)
     const estimatedPay =
       rate != null
         ? Math.round(
             (rate / 60) *
-              (workMin + overtimeMin * settings.overtimeRate + holidayMin * settings.holidayRate + nightMin * (settings.nightRate - 1))
+              (workMin +
+                overtimeBaseMin * settings.overtimeRate +
+                overtime60Min * settings.overtime60Rate +
+                holidayMin * settings.holidayRate +
+                nightMin * (settings.nightRate - 1))
           )
         : null;
 
     results.push({
       user_id, staff_name: st.name, workedDays,
-      grossMin, breakMin, workMin, overtimeMin, nightMin, holidayMin, paidMin,
+      grossMin, breakMin, workMin, overtimeMin, overtime60Min, nightMin, holidayMin, paidMin,
       hourlyRate: rate, estimatedPay, needsReview, entries,
     });
   }

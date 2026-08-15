@@ -12,6 +12,7 @@ export const DEFAULT_PAYROLL_SETTINGS: PayrollSettings = {
   roundScope: "month",
   roundMode: "up",
   overtimeRate: 1.25,
+  overtime60Rate: 1.5, // 月60時間超の時間外
   nightRate: 1.25,
   holidayRate: 1.35,
   deemedBreaks: [

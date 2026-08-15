@@ -73,6 +73,24 @@ const one = (ps: PunchEvent[]) => aggregatePayroll({ punches: ps, settings: S, h
   eq("week40 overtimeMin", r.overtimeMin, 480);
 }
 
+// 月60時間超の時間外割増：週1日勤務を20週分（各週40h以内→週40h按分なし）、各日9:00-22:00
+// 拘束780・休憩60→実働720、日8h超で残業240/日。20日で残業4800分（>3600）。
+{
+  const ps: PunchEvent[] = [];
+  // 2024-01-01(月)から7日おきに20回（各日が別々の週＝週40h按分が起きない）
+  const start = new Date(Date.UTC(2024, 0, 1));
+  for (let i = 0; i < 20; i++) {
+    const d = new Date(start.getTime() + i * 7 * 86400000).toISOString().slice(0, 10);
+    ps.push(P("u", "clock_in", `${d}T09:00:00+09:00`), P("u", "clock_out", `${d}T22:00:00+09:00`));
+  }
+  const r = one(ps);
+  eq("ot60 workMin", r.workMin, 9600); // 480*20
+  eq("ot60 overtimeMin(total)", r.overtimeMin, 4800); // 240*20
+  eq("ot60 overtime60Min", r.overtime60Min, 1200); // 4800-3600
+  // 概算: 9600*1.0 + 3600*1.25 + 1200*1.5 = 9600+4500+1800 = 15900分相当 → 1000/60*15900
+  eq("ot60 estPay", r.estimatedPay, 265000);
+}
+
 // --- 派遣先報告 ---
 import { aggregateClientReport, ClientPunch } from "../src/lib/payroll/clientReport";
 {
