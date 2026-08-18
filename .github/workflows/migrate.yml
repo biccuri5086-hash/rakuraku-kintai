@@ -1,0 +1,37 @@
+name: DB Migrate
+
+# 実行タイミング:
+#  1) 手動（Actionsタブ → DB Migrate → Run workflow）
+#  2) main に db/migrations/ の変更がマージされたとき自動
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "db/migrations/**"
+      - ".github/workflows/migrate.yml"
+
+# 同時に複数のマイグレーションが走らないよう直列化
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Guard — DATABASE_URL secret must be set
+        if: ${{ secrets.DATABASE_URL == '' }}
+        run: |
+          echo "::error::Secret DATABASE_URL が未設定です。Settings → Secrets and variables → Actions で登録してください。"
+          exit 1
+      - name: Run migrations
+        run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

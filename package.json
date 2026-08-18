@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "migrate": "node scripts/migrate.mjs",
     "test": "tsc -p tsconfig.test.json && node .test-build/scripts/payroll_selftest.js && node .test-build/scripts/compliance_selftest.js && node .test-build/scripts/billing_selftest.js && node .test-build/scripts/tenant_isolation_test.js"
   },
   "dependencies": {
@@ -26,6 +27,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.5",
+    "pg": "^8.23.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
