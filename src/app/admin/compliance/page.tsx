@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldAlert, LogOut, Download, AlertTriangle, Clock, HelpCircle, Check, Building2, User, FileText } from "lucide-react";
+import { ShieldAlert, LogOut, Download, AlertTriangle, Clock, HelpCircle, Check, Building2, User, FileText, Settings, ClipboardList } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type Level = "ok" | "warn" | "expired" | "unknown";
@@ -21,7 +21,13 @@ type Alert = {
 type LedgerRow = {
   staff_name: string; client_name: string; org_unit: string | null; job_content: string | null;
   type: string; start_date: string; end_date: string | null; individualLimit: string | null; officeLimit: string | null;
+  dispatch_manager: string | null; employment_type: string | null; social_insurance: string | null;
 };
+type StaffAttr = { user_id: string; name: string; employment_type: string | null; social_insurance: string | null };
+type CSettings = { agency_manager: string | null; complaint_contact: string | null; wage_method: string | null };
+
+const EMP_LABEL: Record<string, string> = { indefinite: "無期", fixed: "有期" };
+const SOC_LABEL: Record<string, string> = { enrolled: "加入", not_enrolled: "未加入", exempt: "対象外" };
 
 const LEVEL_UI: Record<Level, { label: string; cls: string; icon: typeof AlertTriangle }> = {
   expired: { label: "超過", cls: "bg-red-50 text-red-700 border-red-200", icon: AlertTriangle },
@@ -41,6 +47,10 @@ export default function CompliancePage() {
   const [acked, setAcked] = useState<Record<string, boolean>>({});
   const [ackMsg, setAckMsg] = useState<string | null>(null);
   const [showLedger, setShowLedger] = useState(false);
+  const [showLedgerSettings, setShowLedgerSettings] = useState(false);
+  const [staffAttrs, setStaffAttrs] = useState<StaffAttr[]>([]);
+  const [cset, setCset] = useState<CSettings>({ agency_manager: "", complaint_contact: "", wage_method: "" });
+  const [csetMsg, setCsetMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -54,20 +64,53 @@ export default function CompliancePage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [aRes, lRes] = await Promise.all([
+    const [aRes, lRes, sRes, stRes] = await Promise.all([
       fetch("/api/admin/compliance/alerts", { cache: "no-store" }),
       fetch("/api/admin/compliance/ledger", { cache: "no-store" }),
+      fetch("/api/admin/compliance/settings", { cache: "no-store" }),
+      fetch("/api/admin/staff", { cache: "no-store" }),
     ]);
     if (aRes.status === 401) { router.replace("/admin/login"); return; }
     const aData = await aRes.json();
     const lData = await lRes.json().catch(() => ({}));
+    const sData = await sRes.json().catch(() => ({}));
+    const stData = await stRes.json().catch(() => ({}));
     setAlerts(aData.ok ? aData.alerts : []);
     setCounts(aData.ok ? aData.counts : { expired: 0, warn: 0, unknown: 0 });
     setLedger(lData.ok ? lData.rows : []);
+    if (sData.ok && sData.settings) {
+      setCset({
+        agency_manager: sData.settings.agency_manager ?? "",
+        complaint_contact: sData.settings.complaint_contact ?? "",
+        wage_method: sData.settings.wage_method ?? "",
+      });
+    }
+    setStaffAttrs(stData.ok ? stData.staff : []);
     setLoading(false);
   }, [router]);
 
   useEffect(() => { if (authed) load(); }, [authed, load]);
+
+  const saveSettings = async () => {
+    setCsetMsg(null);
+    const res = await fetch("/api/admin/compliance/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cset),
+    });
+    const data = await res.json().catch(() => ({}));
+    setCsetMsg(data.ok ? "保存しました" : (data.message ?? "保存に失敗しました"));
+  };
+
+  const updateStaffAttr = async (user_id: string, patch: Partial<StaffAttr>) => {
+    const next = staffAttrs.map((s) => (s.user_id === user_id ? { ...s, ...patch } : s));
+    setStaffAttrs(next);
+    const cur = next.find((s) => s.user_id === user_id)!;
+    await fetch("/api/admin/staff", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id, employment_type: cur.employment_type, social_insurance: cur.social_insurance }),
+    });
+    load();
+  };
 
   const keyOf = (a: Alert) => `${a.scope}|${a.client_id}|${a.staff_id ?? ""}|${a.org_unit ?? ""}`;
 
@@ -188,6 +231,81 @@ export default function CompliancePage() {
           </div>
         )}
 
+        <div className="pt-2">
+          <button onClick={() => setShowLedgerSettings((v) => !v)} className="text-sm font-bold text-gray-700 flex items-center gap-2">
+            <Settings size={16} className="text-gray-400" /> 台帳の記載事項（会社情報・スタッフ属性） {showLedgerSettings ? "▲" : "▼"}
+          </button>
+        </div>
+
+        {showLedgerSettings && (
+          <div className="space-y-4">
+            {/* 会社単位（派遣元責任者・苦情申出先・待遇決定方式） */}
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                <Building2 size={15} className="text-[#06C755]" /> 会社情報（法37条）
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-xs font-semibold text-gray-500">派遣元責任者</span>
+                  <input value={cset.agency_manager ?? ""} onChange={(e) => setCset({ ...cset, agency_manager: e.target.value })}
+                    placeholder="氏名" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#06C755]" />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold text-gray-500">待遇決定方式</span>
+                  <select value={cset.wage_method ?? ""} onChange={(e) => setCset({ ...cset, wage_method: e.target.value })}
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#06C755]">
+                    <option value="">未設定</option>
+                    <option value="roushi">労使協定方式</option>
+                    <option value="kinto">均等・均衡方式</option>
+                  </select>
+                </label>
+              </div>
+              <label className="block">
+                <span className="text-xs font-semibold text-gray-500">苦情の申出先・処理担当</span>
+                <input value={cset.complaint_contact ?? ""} onChange={(e) => setCset({ ...cset, complaint_contact: e.target.value })}
+                  placeholder="担当者・連絡先" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#06C755]" />
+              </label>
+              <div className="flex items-center gap-2">
+                <button onClick={saveSettings} className="bg-[#06C755] text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-[#05b34c] transition-colors">保存</button>
+                {csetMsg && <span className="text-xs text-gray-500">{csetMsg}</span>}
+              </div>
+            </div>
+
+            {/* スタッフ属性（無期/有期・社保） */}
+            <div className="bg-white rounded-2xl shadow p-4">
+              <p className="text-sm font-bold text-gray-700 flex items-center gap-2 mb-2">
+                <ClipboardList size={15} className="text-[#06C755]" /> スタッフ属性（無期/有期・社会保険）
+              </p>
+              {staffAttrs.length === 0 ? (
+                <p className="text-xs text-gray-400 py-2">スタッフが登録されていません。</p>
+              ) : (
+                <div className="space-y-2">
+                  {staffAttrs.map((s) => (
+                    <div key={s.user_id} className="flex items-center justify-between gap-2 flex-wrap border-b border-gray-50 pb-2">
+                      <span className="text-sm font-semibold text-gray-800 min-w-[6rem]">{s.name}</span>
+                      <div className="flex items-center gap-2">
+                        <select value={s.employment_type ?? ""} onChange={(e) => updateStaffAttr(s.user_id, { employment_type: e.target.value || null })}
+                          className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:border-[#06C755]">
+                          <option value="">区分未設定</option>
+                          <option value="indefinite">無期</option>
+                          <option value="fixed">有期</option>
+                        </select>
+                        <select value={s.social_insurance ?? ""} onChange={(e) => updateStaffAttr(s.user_id, { social_insurance: e.target.value || null })}
+                          className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:border-[#06C755]">
+                          <option value="">社保未設定</option>
+                          <option value="enrolled">加入</option>
+                          <option value="not_enrolled">未加入</option>
+                          <option value="exempt">対象外</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between pt-2">
           <button onClick={() => setShowLedger((v) => !v)} className="text-sm font-bold text-gray-700 flex items-center gap-2">
             <ShieldAlert size={16} className="text-gray-400" /> 派遣元管理台帳 {showLedger ? "▲" : "▼"}
@@ -208,7 +326,10 @@ export default function CompliancePage() {
                 <thead>
                   <tr className="bg-gray-50 text-gray-500 text-xs">
                     <th className="text-left font-semibold px-3 py-2.5">派遣先</th>
+                    <th className="text-left font-semibold px-3 py-2.5">派遣先責任者</th>
                     <th className="text-left font-semibold px-3 py-2.5">スタッフ</th>
+                    <th className="text-left font-semibold px-3 py-2.5">無期/有期</th>
+                    <th className="text-left font-semibold px-3 py-2.5">社保</th>
                     <th className="text-left font-semibold px-3 py-2.5">種別</th>
                     <th className="text-left font-semibold px-3 py-2.5">期間</th>
                     <th className="text-left font-semibold px-3 py-2.5">個人抵触日</th>
@@ -219,7 +340,10 @@ export default function CompliancePage() {
                   {ledger.map((r, i) => (
                     <tr key={i} className="border-t border-gray-50">
                       <td className="px-3 py-2.5 font-semibold text-gray-800">{r.client_name}</td>
+                      <td className="px-3 py-2.5 text-gray-500">{r.dispatch_manager ?? <span className="text-gray-300">-</span>}</td>
                       <td className="px-3 py-2.5 text-gray-700">{r.staff_name}</td>
+                      <td className="px-3 py-2.5 text-gray-500">{r.employment_type ? EMP_LABEL[r.employment_type] : <span className="text-gray-300">-</span>}</td>
+                      <td className="px-3 py-2.5 text-gray-500">{r.social_insurance ? SOC_LABEL[r.social_insurance] : <span className="text-gray-300">-</span>}</td>
                       <td className="px-3 py-2.5 text-gray-500">{r.type === "ongoing" ? "中長期" : "単発"}</td>
                       <td className="px-3 py-2.5 text-gray-500 font-mono text-xs">{r.start_date}〜{r.end_date ?? ""}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{r.individualLimit ?? <span className="text-gray-300">-</span>}</td>
@@ -236,7 +360,8 @@ export default function CompliancePage() {
           <p>※ 事業所抵触日は「延長後 ＞ 事業所抵触日（派遣先設定）＞ 受入開始日＋3年」の順で採用します。</p>
           <p>※ 個人抵触日は「同一の派遣先・組織単位での中長期派遣の開始＋3年」で算出し、<span className="font-semibold">クーリング期間（3ヶ月超の空白でリセット）を考慮</span>します。精度は<span className="font-semibold">受入開始日・組織単位</span>の登録で上がります。</p>
           <p>※ 事業所アラートの「通知書」から<span className="font-semibold">抵触日通知書（参考様式・印刷/PDF）</span>を作成できます。</p>
-          <p className="text-amber-600">※ 管理台帳(法37条)の法定記載事項のうち、<span className="font-semibold">無期/有期区分・派遣元/派遣先責任者・教育訓練/キャリコン・社保加入・労使協定対象</span>等は<span className="font-semibold">未対応</span>です（就業実績・抵触日のみ）。本番運用前に社労士確認を推奨。</p>
+          <p>※ 管理台帳(法37条)に <span className="font-semibold">派遣元/派遣先責任者・無期/有期区分・社会保険加入状況・待遇決定方式・苦情申出先</span> を追加しました（上の「台帳の記載事項」から入力、CSVにも出力）。</p>
+          <p className="text-amber-600">※ <span className="font-semibold">教育訓練/キャリアコンサルティングの実施状況・就業日時の明細・苦情処理の経過</span>等はシステム外の別途記録が必要です。様式・記載事項の網羅性は本番運用前に社労士確認を推奨。</p>
         </div>
       </main>
     </div>

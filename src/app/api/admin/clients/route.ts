@@ -12,7 +12,7 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("clients")
-      .select("id, name, workplace_name, address, contact_name, contact_phone, teishokubi, created_at")
+      .select("id, name, workplace_name, address, contact_name, contact_phone, dispatch_manager, teishokubi, created_at")
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false });
     if (error) throw error;
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
         address: clean(body?.address),
         contact_name: clean(body?.contact_name),
         contact_phone: clean(body?.contact_phone),
+        dispatch_manager: clean(body?.dispatch_manager),
       })
       .select("id")
       .maybeSingle();
@@ -78,6 +79,7 @@ export async function PATCH(req: NextRequest) {
       address: clean(body?.address),
       contact_name: clean(body?.contact_name),
       contact_phone: clean(body?.contact_phone),
+      dispatch_manager: clean(body?.dispatch_manager),
     }).eq("id", id).eq("company_id", ctx.companyId);
     if (error) throw error;
     return NextResponse.json({ ok: true });

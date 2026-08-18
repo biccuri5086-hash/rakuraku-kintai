@@ -12,11 +12,12 @@ type Client = {
   address: string | null;
   contact_name: string | null;
   contact_phone: string | null;
+  dispatch_manager: string | null;
   teishokubi: string | null;
   created_at: string;
 };
 
-const EMPTY = { name: "", workplace_name: "", address: "", contact_name: "", contact_phone: "" };
+const EMPTY = { name: "", workplace_name: "", address: "", contact_name: "", contact_phone: "", dispatch_manager: "" };
 
 export default function ClientsPage() {
   const router = useRouter();
@@ -91,6 +92,7 @@ export default function ClientsPage() {
       address: c.address ?? "",
       contact_name: c.contact_name ?? "",
       contact_phone: c.contact_phone ?? "",
+      dispatch_manager: c.dispatch_manager ?? "",
     });
     setEditingId(c.id);
     setShowForm(true);
@@ -165,6 +167,7 @@ export default function ClientsPage() {
               <Field label="担当者名" value={form.contact_name} onChange={(v) => setForm({ ...form, contact_name: v })} placeholder="山田" />
               <Field label="担当者電話" value={form.contact_phone} onChange={(v) => setForm({ ...form, contact_phone: v })} placeholder="090-..." />
             </div>
+            <Field label="派遣先責任者（管理台帳用）" value={form.dispatch_manager} onChange={(v) => setForm({ ...form, dispatch_manager: v })} placeholder="派遣先の責任者名" />
             <div className="flex gap-2 pt-1">
               <button
                 onClick={handleSave}

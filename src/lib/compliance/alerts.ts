@@ -147,6 +147,7 @@ export function buildLedger(
 ): LedgerRow[] {
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const staffName = new Map(staff.map((s) => [s.user_id, s.display_name]));
+  const staffById = new Map(staff.map((s) => [s.user_id, s]));
 
   // 個人抵触日（(スタッフ×派遣先×組織単位) 群からクーリング考慮で算出）
   const groups = new Map<string, AssignmentRec[]>();
@@ -165,6 +166,7 @@ export function buildLedger(
 
   const rows: LedgerRow[] = assignments.map((a) => {
     const c = a.client_id ? clientById.get(a.client_id) : undefined;
+    const s = staffById.get(a.user_id);
     const key = `${a.user_id}|${a.client_id}|${a.org_unit ?? ""}`;
     return {
       staff_id: a.user_id,
@@ -177,6 +179,9 @@ export function buildLedger(
       end_date: a.end_date ?? null,
       individualLimit: a.type === "ongoing" ? limitByKey.get(key) ?? null : null,
       officeLimit: c ? officeLimit(c).date : null,
+      dispatch_manager: c?.dispatch_manager ?? null,
+      employment_type: s?.employment_type ?? null,
+      social_insurance: s?.social_insurance ?? null,
     };
   });
 

@@ -10,6 +10,7 @@ export interface ClientRec {
   teishokubi?: string | null; // 事業所抵触日（既存列）
   dispatch_start_date?: string | null; // 受入開始日（Phase Cで追加。抵触日未設定時に +3年で算出）
   teishokubi_extended_until?: string | null; // 意見聴取による延長後の抵触日（Phase Cで追加）
+  dispatch_manager?: string | null; // 派遣先責任者（0005で追加）
 }
 
 export interface AssignmentRec {
@@ -26,6 +27,8 @@ export interface AssignmentRec {
 export interface StaffRec {
   user_id: string;
   display_name: string;
+  employment_type?: string | null; // 'indefinite'(無期) / 'fixed'(有期)（0005で追加）
+  social_insurance?: string | null; // 'enrolled' / 'not_enrolled' / 'exempt'（0005で追加）
 }
 
 export interface ComplianceAlert {
@@ -52,4 +55,7 @@ export interface LedgerRow {
   end_date: string | null;
   individualLimit: string | null; // 個人抵触日
   officeLimit: string | null; // 事業所抵触日
+  dispatch_manager: string | null; // 派遣先責任者
+  employment_type: string | null; // 無期/有期
+  social_insurance: string | null; // 社保加入状況
 }
