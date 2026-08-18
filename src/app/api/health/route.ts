@@ -17,9 +17,16 @@ export async function GET() {
     db = "down";
   }
 
+  // 接続先の識別（秘密ではない：Supabaseプロジェクト参照＝公開URLの一部）。
+  // Preview が staging を向いているかの切り分け用。
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const project = supaUrl.match(/^https?:\/\/([a-z0-9]+)\.supabase\.co/i)?.[1] ?? "unknown";
+
   const body = {
     ok: db === "up",
     db,
+    env: process.env.VERCEL_ENV ?? "local", // production / preview / local
+    project, // 接続先Supabaseプロジェクトの参照
     latencyMs: Date.now() - startedAt,
     time: new Date().toISOString(),
   };
