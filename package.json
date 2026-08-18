@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "migrate": "node scripts/migrate.mjs",
     "dogfood": "tsc -p tsconfig.test.json && node --use-system-ca .test-build/scripts/dogfood_test.js",
-    "test": "tsc -p tsconfig.test.json && node .test-build/scripts/payroll_selftest.js && node .test-build/scripts/compliance_selftest.js && node .test-build/scripts/billing_selftest.js && node .test-build/scripts/tenant_isolation_test.js"
+    "test": "tsc -p tsconfig.test.json && node .test-build/scripts/payroll_selftest.js && node .test-build/scripts/compliance_selftest.js && node .test-build/scripts/billing_selftest.js && node .test-build/scripts/paid_leave_selftest.js && node .test-build/scripts/tenant_isolation_test.js"
   },
   "dependencies": {
     "@line/liff": "^2.28.0",

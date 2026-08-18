@@ -14,7 +14,8 @@
     "scripts/**/*.ts",
     "src/lib/payroll/**/*.ts",
     "src/lib/compliance/**/*.ts",
-    "src/lib/billing/**/*.ts"
+    "src/lib/billing/**/*.ts",
+    "src/lib/paid-leave/**/*.ts"
   ],
   "exclude": ["node_modules", ".test-build"]
 }

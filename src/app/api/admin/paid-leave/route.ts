@@ -3,6 +3,7 @@ import { getTenantContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { jstToday } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
+import { activeGrantedDays, takenDays, remainingDays, nextExpiry as nextExpiryOf } from "@/lib/paid-leave/balance";
 
 type Grant = { id: string; user_id: string; granted_days: number; grant_date: string; expires_on: string; note: string | null };
 type Taking = { id: string; user_id: string; taken_date: string; days: number; note: string | null };
@@ -41,17 +42,13 @@ export async function GET() {
     const rows = [...userIds].map((uid) => {
       const gs = grants.filter((g) => g.user_id === uid).sort((a, b) => b.grant_date.localeCompare(a.grant_date));
       const ts = takings.filter((t) => t.user_id === uid).sort((a, b) => b.taken_date.localeCompare(a.taken_date));
-      const grantedActive = gs.filter((g) => g.expires_on >= today).reduce((s, g) => s + Number(g.granted_days), 0);
-      const takenTotal = ts.reduce((s, t) => s + Number(t.days), 0);
-      // 直近の失効予定（有効な付与のうち最も早い expires_on）
-      const nextExpiry = gs.filter((g) => g.expires_on >= today).map((g) => g.expires_on).sort()[0] ?? null;
       return {
         user_id: uid,
         staff_name: nameOf.get(uid) ?? uid,
-        grantedActive,
-        takenTotal,
-        remaining: Math.round((grantedActive - takenTotal) * 10) / 10,
-        nextExpiry,
+        grantedActive: activeGrantedDays(gs, today),
+        takenTotal: takenDays(ts),
+        remaining: remainingDays(gs, ts, today),
+        nextExpiry: nextExpiryOf(gs, today),
         grants: gs,
         takings: ts,
       };
