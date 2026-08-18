@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Building2, FileText, CalendarClock, Wallet, ClipboardList, ShieldAlert, CreditCard } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, CalendarClock, Wallet, CalendarHeart, ClipboardList, ShieldAlert, CreditCard } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "ダッシュボード", icon: LayoutDashboard },
@@ -9,6 +9,7 @@ const NAV = [
   { href: "/admin/assignments", label: "契約", icon: FileText },
   { href: "/admin/shifts", label: "シフト", icon: CalendarClock },
   { href: "/admin/payroll", label: "給与", icon: Wallet },
+  { href: "/admin/paid-leave", label: "有給", icon: CalendarHeart },
   { href: "/admin/client-report", label: "派遣先報告", icon: ClipboardList },
   { href: "/admin/compliance", label: "派遣法", icon: ShieldAlert },
   { href: "/admin/billing", label: "プラン", icon: CreditCard },
