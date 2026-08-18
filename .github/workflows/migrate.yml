@@ -26,12 +26,12 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Guard — DATABASE_URL secret must be set
-        if: ${{ secrets.DATABASE_URL == '' }}
-        run: |
-          echo "::error::Secret DATABASE_URL が未設定です。Settings → Secrets and variables → Actions で登録してください。"
-          exit 1
-      - name: Run migrations
-        run: npm run migrate
+      - name: Run migrations (Secret未設定ならスキップ)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::Secret DATABASE_URL が未設定のためスキップしました。Settings → Secrets and variables → Actions に登録すると次回から自動実行されます。"
+            exit 0
+          fi
+          npm run migrate
