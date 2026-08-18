@@ -137,6 +137,20 @@ export async function GET(req: NextRequest) {
       hourlyRate: r.hourlyRate,
       estimatedPay: r.estimatedPay,
       needsReview: r.needsReview,
+      // 日次ドリルダウン用（管理画面で行を展開して各日を確認できる）
+      entries: r.entries.map((e) => ({
+        date: e.date,
+        inAt: e.inAt,
+        outAt: e.outAt,
+        grossMin: e.grossMin,
+        breakMin: e.breakMin,
+        workMin: e.workMin,
+        overtimeMin: e.overtimeMin,
+        nightMin: e.nightMin,
+        holidayMin: e.holidayMin,
+        isStatutoryHoliday: e.isStatutoryHoliday,
+        flags: e.flags,
+      })),
     }));
     const totals = rows.reduce(
       (t, r) => {

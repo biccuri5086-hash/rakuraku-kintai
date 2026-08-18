@@ -1,9 +1,23 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { useRouter } from "next/navigation";
-import { Wallet, LogOut, Download, AlertTriangle, Settings, CheckCircle, Lock } from "lucide-react";
+import { Wallet, LogOut, Download, AlertTriangle, Settings, CheckCircle, Lock, ChevronRight, ChevronDown } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
+
+type DayEntry = {
+  date: string;
+  inAt: string | null;
+  outAt: string | null;
+  grossMin: number;
+  breakMin: number;
+  workMin: number;
+  overtimeMin: number;
+  nightMin: number;
+  holidayMin: number;
+  isStatutoryHoliday: boolean;
+  flags: string[];
+};
 
 type Row = {
   user_id: string;
@@ -18,6 +32,7 @@ type Row = {
   hourlyRate: number | null;
   estimatedPay: number | null;
   needsReview: boolean;
+  entries: DayEntry[];
 };
 
 type Totals = {
@@ -39,6 +54,20 @@ function hm(min: number): string {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
+// ISO → JSTの HH:MM（打刻時刻表示用）
+function hhmm(iso: string | null): string {
+  if (!iso) return "--:--";
+  const d = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
+  return d.toISOString().slice(11, 16);
+}
+
+// "YYYY-MM-DD" → "M/D(曜)"
+const DOW = ["日", "月", "火", "水", "木", "金", "土"];
+function mdDow(date: string): string {
+  const d = new Date(`${date}T00:00:00+09:00`);
+  return `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})`;
+}
+
 export default function PayrollPage() {
   const router = useRouter();
   const [authed, setAuthed] = useState(false);
@@ -51,6 +80,7 @@ export default function PayrollPage() {
   const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -256,10 +286,17 @@ export default function PayrollPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.user_id} className="border-t border-gray-50">
+                    {rows.map((r) => {
+                      const open = expanded === r.user_id;
+                      return (
+                      <Fragment key={r.user_id}>
+                      <tr
+                        className="border-t border-gray-50 hover:bg-gray-50/60 cursor-pointer"
+                        onClick={() => setExpanded(open ? null : r.user_id)}
+                      >
                         <td className="px-4 py-3 font-semibold text-gray-800">
                           <span className="flex items-center gap-1.5">
+                            {open ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
                             {r.staff_name}
                             {r.needsReview && (
                               <AlertTriangle size={13} className="text-amber-500" aria-label="要確認" />
@@ -284,7 +321,16 @@ export default function PayrollPage() {
                           {r.estimatedPay != null ? yen(r.estimatedPay) : <span className="text-gray-300 font-normal">-</span>}
                         </td>
                       </tr>
-                    ))}
+                      {open && (
+                        <tr className="bg-gray-50/50">
+                          <td colSpan={8} className="px-4 py-3">
+                            <DayBreakdown entries={r.entries} />
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -307,6 +353,62 @@ export default function PayrollPage() {
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function DayBreakdown({ entries }: { entries: DayEntry[] }) {
+  if (entries.length === 0) {
+    return <p className="text-xs text-gray-400">この月の打刻はありません。</p>;
+  }
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white overflow-x-auto">
+      <table className="w-full text-xs whitespace-nowrap">
+        <thead>
+          <tr className="text-gray-400">
+            <th className="text-left font-semibold px-3 py-2">日付</th>
+            <th className="text-left font-semibold px-3 py-2">出退勤</th>
+            <th className="text-right font-semibold px-3 py-2">休憩</th>
+            <th className="text-right font-semibold px-3 py-2">法定内</th>
+            <th className="text-right font-semibold px-3 py-2">残業</th>
+            <th className="text-right font-semibold px-3 py-2">深夜</th>
+            <th className="text-right font-semibold px-3 py-2">法定休日</th>
+            <th className="text-left font-semibold px-3 py-2">状態</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((e) => {
+            const missing = e.flags.includes("missing_punch");
+            const review = missing || e.flags.includes("needs_review");
+            return (
+              <tr key={e.date} className={`border-t border-gray-50 ${review ? "bg-amber-50/50" : ""}`}>
+                <td className="px-3 py-2 text-gray-700">
+                  {mdDow(e.date)}
+                  {e.isStatutoryHoliday && <span className="ml-1 text-[10px] text-red-500 font-bold">法休</span>}
+                </td>
+                <td className="px-3 py-2 font-mono text-gray-600">
+                  {hhmm(e.inAt)}〜{hhmm(e.outAt)}
+                </td>
+                <td className="px-3 py-2 text-right font-mono text-gray-400">{e.breakMin > 0 ? `${e.breakMin}分` : "-"}</td>
+                <td className="px-3 py-2 text-right font-mono text-gray-700">{e.workMin > 0 ? hm(e.workMin) : "-"}</td>
+                <td className="px-3 py-2 text-right font-mono text-gray-600">{e.overtimeMin > 0 ? hm(e.overtimeMin) : "-"}</td>
+                <td className="px-3 py-2 text-right font-mono text-gray-600">{e.nightMin > 0 ? hm(e.nightMin) : "-"}</td>
+                <td className="px-3 py-2 text-right font-mono text-gray-600">{e.holidayMin > 0 ? hm(e.holidayMin) : "-"}</td>
+                <td className="px-3 py-2">
+                  {missing ? (
+                    <span className="text-amber-600 font-bold">退勤打刻なし（除外）</span>
+                  ) : review ? (
+                    <span className="text-amber-600 font-bold">要確認</span>
+                  ) : (
+                    <span className="text-gray-300">OK</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
