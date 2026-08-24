@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useLiff } from "@/components/LiffProvider";
-import { Clock, LogIn, LogOut, CheckCircle, User, MapPin } from "lucide-react";
+import { Clock, LogIn, LogOut, CheckCircle, User, MapPin, AlertCircle } from "lucide-react";
 import { Footer } from "@/components/Footer";
 
 type TodayRecord = {
@@ -33,7 +33,7 @@ function formatDate(date: Date) {
 type Features = { feature_condition: boolean; feature_gps: boolean };
 
 export default function HomePage() {
-  const { isReady, profile, authedFetch } = useLiff();
+  const { isReady, profile, error: liffError, authedFetch } = useLiff();
   const router = useRouter();
   const [now, setNow] = useState(new Date());
   const [todayRecord, setTodayRecord] = useState<TodayRecord>({ clockIn: null, clockOut: null, stale: false });
@@ -146,6 +146,24 @@ export default function HomePage() {
 
   const isWorkingNow = !!todayRecord.clockIn && !todayRecord.clockOut;
   const isDone = !!todayRecord.clockIn && !!todayRecord.clockOut;
+
+  if (liffError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-6 text-center">
+        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+          <AlertCircle size={26} className="text-red-500" />
+        </div>
+        <p className="text-gray-700 font-bold">開けませんでした</p>
+        <p className="text-gray-500 text-sm leading-relaxed">{liffError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 bg-[#06C755] text-white font-bold px-6 py-2.5 rounded-lg"
+        >
+          再読み込み
+        </button>
+      </div>
+    );
+  }
 
   if (!isReady || !profileChecked) {
     return (
