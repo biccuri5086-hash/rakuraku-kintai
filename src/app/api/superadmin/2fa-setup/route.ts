@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import QRCode from "qrcode";
 import { generateSecret, buildOtpAuthUrl, verifyTOTP } from "@/lib/totp";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
@@ -27,11 +28,17 @@ export async function GET(req: NextRequest) {
     const account = admin?.email ?? "superadmin";
     const otpauthUrl = buildOtpAuthUrl(newSecret, account, "RakurakuKintai-Owner");
 
+    // QRはサーバー内で生成して data URI で返す。
+    // 以前は外部のQR生成サービス(api.qrserver.com)に otpauth URL をそのまま渡していたため、
+    // 2FAのシークレットが第三者のサーバーに送信されていた（＝2FAの意味が無くなる）。
+    const qrDataUrl = await QRCode.toDataURL(otpauthUrl, { margin: 1, width: 240 });
+
     return NextResponse.json({
       ok: true,
       currentlyEnabled: !!admin?.totp_secret,
       newSecret,
       otpauthUrl,
+      qrDataUrl,
     });
   } catch (e) {
     return errorResponse(e);

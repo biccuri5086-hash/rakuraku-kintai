@@ -10,7 +10,7 @@ export default function SuperSetup2FAPage() {
   const [loading, setLoading] = useState(true);
   const [currentlyEnabled, setCurrentlyEnabled] = useState(false);
   const [secret, setSecret] = useState("");
-  const [otpauthUrl, setOtpauthUrl] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [testCode, setTestCode] = useState("");
   const [verified, setVerified] = useState(false);
@@ -36,7 +36,7 @@ export default function SuperSetup2FAPage() {
     if (data.ok) {
       setCurrentlyEnabled(data.currentlyEnabled);
       setSecret(data.newSecret);
-      setOtpauthUrl(data.otpauthUrl);
+      setQrDataUrl(data.qrDataUrl ?? "");
     }
     setLoading(false);
   };
@@ -116,9 +116,6 @@ export default function SuperSetup2FAPage() {
     }
   };
 
-  const qrUrl = otpauthUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(otpauthUrl)}`
-    : "";
 
   if (!authed || loading) {
     return (
@@ -184,10 +181,11 @@ export default function SuperSetup2FAPage() {
             Google Authenticator / Microsoft Authenticator / 1Password などで、QRコードをスキャンするか、シークレットを手動入力してください。
           </p>
 
-          {qrUrl && (
+          {qrDataUrl && (
             <div className="flex justify-center">
+              {/* サーバー内で生成した data URI。外部サービスにシークレットを渡さない。 */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qrUrl} alt="2FA QR Code" className="border-2 border-slate-200 rounded-xl" />
+              <img src={qrDataUrl} alt="2FA QR Code" width={240} height={240} className="border-2 border-slate-200 rounded-xl" />
             </div>
           )}
 
