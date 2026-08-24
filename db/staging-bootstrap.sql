@@ -53,10 +53,12 @@ alter table user_profiles enable row level security;
 alter table attendance enable row level security;
 alter table condition_reports enable row level security;
 
--- 開発用ポリシー（全操作許可）
-create policy "dev_allow_all_profiles" on user_profiles for all using (true) with check (true);
-create policy "dev_allow_all_attendance" on attendance for all using (true) with check (true);
-create policy "dev_allow_all_condition" on condition_reports for all using (true) with check (true);
+-- 【重要】ここには開発用の全許可ポリシー(dev_allow_all_*)を書かない。
+-- 本アプリは常に service_role 経由でのみDBに触れる（アプリ側でテナント分離を担保）。
+-- anon キーはブラウザに露出するため、ポリシーを1つでも作ると全社のスタッフ情報・
+-- 打刻・コンディションが誰でも読める状態になる。
+-- 正しい状態＝「RLS 有効 かつ ポリシー0件」（service_role だけが通る）。
+-- 以前ここで作っていた dev_allow_all_* は、このファイル後半で drop policy している。
 
 -- 既存の attendance テーブルにGPS列を追加する場合（テーブルが既に存在する場合のみ実行）
 -- alter table attendance add column if not exists lat double precision;
@@ -1161,6 +1163,9 @@ create table if not exists compliance_settings (
 );
 
 alter table compliance_settings enable row level security;
+
+-- 追跡テーブルにも RLS（ポリシーは作らない＝service_role のみ）
+alter table schema_migrations enable row level security;
 
 
 -- STEP 2：派遣先（clients）に派遣先責任者

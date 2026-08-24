@@ -10,6 +10,8 @@ import { Footer } from "@/components/Footer";
 type TodayRecord = {
   clockIn: string | null;
   clockOut: string | null;
+  /** 前回の退勤打刻が漏れている（管理者の確認が必要） */
+  stale: boolean;
 };
 
 function formatTime(iso: string) {
@@ -34,13 +36,14 @@ export default function HomePage() {
   const { isReady, profile, authedFetch } = useLiff();
   const router = useRouter();
   const [now, setNow] = useState(new Date());
-  const [todayRecord, setTodayRecord] = useState<TodayRecord>({ clockIn: null, clockOut: null });
+  const [todayRecord, setTodayRecord] = useState<TodayRecord>({ clockIn: null, clockOut: null, stale: false });
   const [loading, setLoading] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "done">("idle");
   const [tapped, setTapped] = useState(false);
   const [clockInDone, setClockInDone] = useState(false);
   const [doneType, setDoneType] = useState<"in" | "out">("in");
+  const [clockError, setClockError] = useState<string | null>(null);
   const [features, setFeatures] = useState<Features>({ feature_condition: true, feature_gps: true });
   const [companyName, setCompanyName] = useState<string | null>(null);
 
@@ -80,7 +83,7 @@ export default function HomePage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.ok) {
-          setTodayRecord({ clockIn: data.clockIn, clockOut: data.clockOut });
+          setTodayRecord({ clockIn: data.clockIn, clockOut: data.clockOut, stale: !!data.stale });
         }
       });
   }, [profile, profileChecked, tapped, authedFetch]);
@@ -88,6 +91,7 @@ export default function HomePage() {
   const handleClock = async () => {
     if (!profile || loading) return;
     const type = todayRecord.clockIn && !todayRecord.clockOut ? "clock_out" : "clock_in";
+    setClockError(null);
     setLoading(true);
 
     const res = await authedFetch("/api/me/clock", {
@@ -96,41 +100,45 @@ export default function HomePage() {
     });
     const data = await res.json();
 
-    if (data.ok) {
-      setTapped((v) => !v); // 打刻後に当日データを再取得
-      if (type === "clock_in") {
-        // 出勤：GPSで就業場所を記録。コンディションは聞かない（退勤時に聞く）。
-        if (features.feature_gps && navigator.geolocation) {
-          setGpsStatus("acquiring");
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const gps = {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-              };
-              setGpsStatus("done");
-              authedFetch("/api/me/gps", {
-                method: "POST",
-                body: JSON.stringify({ attendanceId: data.attendanceId, ...gps }),
-              });
-            },
-            () => setGpsStatus("done"),
-            { timeout: 10000, maximumAge: 0 }
-          );
-        }
-        setDoneType("in");
-        setClockInDone(true);
-        setTimeout(() => setClockInDone(false), 2500);
+    if (!data.ok) {
+      setClockError(data.message ?? "打刻に失敗しました。時間をおいてお試しください");
+      setLoading(false);
+      return;
+    }
+
+    setTapped((v) => !v); // 打刻後に当日データを再取得
+    if (type === "clock_in") {
+      // 出勤：GPSで就業場所を記録。コンディションは聞かない（退勤時に聞く）。
+      if (features.feature_gps && navigator.geolocation) {
+        setGpsStatus("acquiring");
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const gps = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+            };
+            setGpsStatus("done");
+            authedFetch("/api/me/gps", {
+              method: "POST",
+              body: JSON.stringify({ attendanceId: data.attendanceId, ...gps }),
+            });
+          },
+          () => setGpsStatus("done"),
+          { timeout: 10000, maximumAge: 0 }
+        );
+      }
+      setDoneType("in");
+      setClockInDone(true);
+      setTimeout(() => setClockInDone(false), 2500);
+    } else {
+      // 退勤：ここでコンディション（体調）を聞く。
+      setDoneType("out");
+      setClockInDone(true);
+      if (features.feature_condition) {
+        setTimeout(() => router.push("/condition"), 3000);
       } else {
-        // 退勤：ここでコンディション（体調）を聞く。
-        setDoneType("out");
-        setClockInDone(true);
-        if (features.feature_condition) {
-          setTimeout(() => router.push("/condition"), 3000);
-        } else {
-          setTimeout(() => setClockInDone(false), 2500);
-        }
+        setTimeout(() => setClockInDone(false), 2500);
       }
     }
     setLoading(false);
@@ -234,24 +242,34 @@ export default function HomePage() {
           </div>
         </div>
 
-        {!isDone && (
-          <button
-            onClick={handleClock}
-            disabled={loading}
-            className={`${isWorkingNow ? "bg-orange-500 active:bg-orange-600" : "bg-[#06C755] active:bg-green-600"}
-              text-white rounded-2xl shadow-lg flex flex-col items-center justify-center gap-2
-              py-10 text-2xl font-bold transition-transform active:scale-95 disabled:opacity-60`}
-          >
-            {loading ? (
-              <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                {isWorkingNow ? <LogOut size={32} /> : <LogIn size={32} />}
-                {isWorkingNow ? "退勤する" : "出勤する"}
-              </>
-            )}
-          </button>
+        {clockError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
+            {clockError}
+          </div>
         )}
+
+        {todayRecord.stale && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 text-sm">
+            前回の退勤打刻が記録されていません。担当者にご確認ください。
+          </div>
+        )}
+
+        <button
+          onClick={handleClock}
+          disabled={loading}
+          className={`${isWorkingNow ? "bg-orange-500 active:bg-orange-600" : "bg-[#06C755] active:bg-green-600"}
+            text-white rounded-2xl shadow-lg flex flex-col items-center justify-center gap-2
+            py-10 text-2xl font-bold transition-transform active:scale-95 disabled:opacity-60`}
+        >
+          {loading ? (
+            <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <>
+              {isWorkingNow ? <LogOut size={32} /> : <LogIn size={32} />}
+              {isWorkingNow ? "退勤する" : "出勤する"}
+            </>
+          )}
+        </button>
 
         {features.feature_condition && (
           <button

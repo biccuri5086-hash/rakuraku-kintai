@@ -58,7 +58,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-bold text-gray-800 mb-2">7. お問い合わせ</h2>
           <p>プライバシーポリシーに関するお問い合わせは、下記までご連絡ください。</p>
-          <p className="mt-2 text-gray-500">事業者名：（事業者名を記入してください）<br />メール：（メールアドレスを記入してください）</p>
+          <p className="mt-2 text-gray-500">事業者名：小原 健太<br />メール：biccuri5086@gmail.com</p>
         </section>
       </div>
     </div>
