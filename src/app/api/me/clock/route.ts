@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { jstToday, jstDayBounds } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
+import { resolveSessionState, canPunch, PunchType } from "@/lib/attendance-session";
+
+// セッション判定に必要な直近の打刻だけを見る（夜勤の日跨ぎに対応するためカレンダー日では区切らない）。
+const LOOKBACK_HOURS = 72;
 
 export async function POST(req: NextRequest) {
   try {
     const user = await getLineUserCached(req);
     if (!user) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
 
-    let type: "clock_in" | "clock_out";
+    let type: PunchType;
     try {
       const body = await req.json();
       if (body.type !== "clock_in" && body.type !== "clock_out") {
@@ -33,22 +36,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "プロフィール未登録です。先にスタッフ登録を済ませてください。" }, { status: 400 });
     }
 
-    const { start, end } = jstDayBounds(jstToday());
-    const { data: existing } = await supabase
+    const since = new Date(Date.now() - LOOKBACK_HOURS * 3_600_000).toISOString();
+    const { data: recent } = await supabase
       .from("attendance")
-      .select("id, type")
+      .select("type, timestamp")
       .eq("user_id", user.userId)
       .eq("company_id", profile.company_id)
-      .gte("timestamp", start)
-      .lte("timestamp", end)
-      .order("timestamp", { ascending: false });
+      .gte("timestamp", since)
+      .order("timestamp", { ascending: false })
+      .limit(10);
 
-    const todayRecords = (existing ?? []) as { id: string; type: string }[];
-    if (type === "clock_in" && todayRecords.some((r) => r.type === "clock_in")) {
-      return NextResponse.json({ ok: false, message: "本日はすでに出勤打刻済みです" }, { status: 409 });
-    }
-    if (type === "clock_out" && !todayRecords.some((r) => r.type === "clock_in")) {
-      return NextResponse.json({ ok: false, message: "出勤打刻が見つかりません" }, { status: 409 });
+    const state = resolveSessionState((recent ?? []) as { type: string; timestamp: string }[]);
+    const decision = canPunch(type, state);
+    if (!decision.allowed) {
+      return NextResponse.json({ ok: false, message: decision.message }, { status: decision.status });
     }
 
     const { data, error } = await supabase
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "打刻に失敗しました" }, { status: 500 });
     }
 
-    await logAudit(req, "staff_clock", { type }, {
+    await logAudit(req, "staff_clock", { type, prev_state: state.kind }, {
       actorType: "staff", actorId: user.userId, companyId: profile.company_id,
     });
 

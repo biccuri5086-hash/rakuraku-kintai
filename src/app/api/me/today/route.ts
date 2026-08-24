@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { jstToday, jstDayBounds } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
+import { resolveSessionState } from "@/lib/attendance-session";
+
+// 夜勤（日跨ぎ）に対応するため、カレンダー日ではなく直近の勤務セッションを返す。
+const LOOKBACK_HOURS = 72;
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,26 +20,34 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (!profile?.company_id) {
-      return NextResponse.json({ ok: true, clockIn: null, clockOut: null });
+      return NextResponse.json({ ok: true, clockIn: null, clockOut: null, stale: false });
     }
 
-    const { start, end } = jstDayBounds(jstToday());
+    const since = new Date(Date.now() - LOOKBACK_HOURS * 3_600_000).toISOString();
     const { data, error } = await supabase
       .from("attendance")
       .select("type, timestamp")
       .eq("user_id", user.userId)
       .eq("company_id", profile.company_id)
-      .gte("timestamp", start)
-      .lte("timestamp", end)
-      .order("timestamp", { ascending: true });
+      .gte("timestamp", since)
+      .order("timestamp", { ascending: false })
+      .limit(10);
 
     if (error) throw new Error(`supabase: ${error.message}`);
 
-    const records = (data ?? []) as { type: string; timestamp: string }[];
-    const clockIn = records.find((r) => r.type === "clock_in")?.timestamp ?? null;
-    const clockOut = records.find((r) => r.type === "clock_out")?.timestamp ?? null;
+    const state = resolveSessionState((data ?? []) as { type: string; timestamp: string }[]);
 
-    return NextResponse.json({ ok: true, clockIn, clockOut });
+    switch (state.kind) {
+      case "working":
+        return NextResponse.json({ ok: true, clockIn: state.openedAt, clockOut: null, stale: false });
+      case "completed":
+        return NextResponse.json({ ok: true, clockIn: state.openedAt, clockOut: state.closedAt, stale: false });
+      case "stale":
+        // 退勤打刻漏れ。当日の出勤は妨げないが、画面で注意を促す。
+        return NextResponse.json({ ok: true, clockIn: null, clockOut: null, stale: true });
+      default:
+        return NextResponse.json({ ok: true, clockIn: null, clockOut: null, stale: false });
+    }
   } catch (e) {
     return errorResponse(e);
   }

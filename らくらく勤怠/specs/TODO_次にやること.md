@@ -25,9 +25,12 @@ Preview環境変数が staging に届いていない（`/api/health` が `projec
 - 🧑 Sentry のアラートルール（新規Issue／急増）をメール通知ON
 - 🧑 Vercel の Deployment Failed 通知をON
 
-## C. 運営者アカウントのセキュリティ（重要・未実施なら早めに）
-- 🧑 運営者パスワードを `2026super` から自分だけのものに変更 → `/superadmin/password`
-- 🧑 運営者2FAを有効化 → `/superadmin/2fa-setup`（認証アプリでQRを読むだけ。Vercel設定不要）
+## C. 【最優先】販売前セキュリティ対応 — 専用の手順書あり
+> **`specs/手順書_販売前セキュリティ対応.md` に画面操作つきの手順をまとめてあります。まずそれを開いてください。**
+- 🧑 STEP 0：`claude/rakuraku-kintai-final-test-iy5q7i` を main にマージ → Vercel デプロイ確認
+- 🧑 STEP 1：運営者パスワードを変更（現在は開発時のものがリポジトリに残存）＋ 2FA を有効化
+- 🧑 STEP 2：`0006_rls_hardening.sql` を本番DBに適用し、`pg_policies` が0行であることを確認
+  （開発用の全許可ポリシーが本番に残っていると、anonキーで全社データが読める）
 
 ---
 
