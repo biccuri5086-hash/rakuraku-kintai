@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, AlertCircle, KeyRound, Mail, Building2 } from "lucide-react";
 
@@ -15,6 +15,15 @@ export default function AdminLoginPage() {
   const [companyId, setCompanyId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // ログインしたままにしている場合、この画面を開いたらそのまま管理画面へ進む
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/me", { cache: "no-store" })
+      .then((res) => { if (!cancelled && res.ok) router.replace("/admin"); })
+      .catch(() => { /* 未ログインならこの画面のまま */ });
+    return () => { cancelled = true; };
+  }, [router]);
 
   // selectedCompanyId は会社選択ボタンから直接渡す。setCompanyId の反映を待つと
   // 1回目の送信に間に合わないため。
@@ -110,6 +119,21 @@ export default function AdminLoginPage() {
             className="border-2 border-gray-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-[#06C755] text-gray-800 disabled:bg-gray-50"
           />
 
+          <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="mt-0.5 accent-[#06C755]"
+            />
+            <span>
+              このブラウザで7日間ログインしたままにする
+              <span className="block text-gray-400">
+                次回から入力なしで開けます。共用のパソコンでは外してください。
+              </span>
+            </span>
+          </label>
+
           {showTotp && (
             <div className="flex flex-col gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3">
               <label className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
@@ -127,20 +151,6 @@ export default function AdminLoginPage() {
                 autoFocus
                 className="border-2 border-blue-300 rounded-lg px-4 py-3 text-2xl font-mono text-center tracking-widest focus:outline-none focus:border-blue-500 text-gray-800"
               />
-              <label className="flex items-start gap-2 text-xs text-blue-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="mt-0.5 accent-[#06C755]"
-                />
-                <span>
-                  このブラウザを7日間記憶する
-                  <span className="block text-blue-600/80">
-                    次回からメールとパスワードだけでログインできます。共用のパソコンでは外してください。
-                  </span>
-                </span>
-              </label>
             </div>
           )}
 

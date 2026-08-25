@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { selectAdmin, MAX_LOGIN_CANDIDATES, type AdminCandidate } from "@/lib/admin-login";
-import { signTenantToken, TENANT_SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/tenant-session";
+import { signTenantToken, TENANT_SESSION_COOKIE, SESSION_MAX_AGE, SESSION_MAX_AGE_REMEMBERED } from "@/lib/tenant-session";
 import { checkRateLimit, recordFailure, recordSuccess } from "@/lib/rate-limit";
 import { verifyTOTP } from "@/lib/totp";
 import { TRUST_COOKIE, TRUSTED_DEVICE_MAX_AGE, credentialFingerprint, isTrustedDevice, signTrustToken } from "@/lib/trusted-device";
@@ -155,13 +155,16 @@ export async function POST(req: NextRequest) {
       actorType: "admin", actorId: admin.id, companyId: admin.company_id,
     });
 
-    const token = signTenantToken({ adminId: admin.id, companyId: admin.company_id });
+    // 「ログインしたままにする」を選んだ場合はセッションを7日保つ。
+    // パスワードは保存しない。次に開いたときログイン済みとして扱うだけ。
+    const sessionMaxAge = remember ? SESSION_MAX_AGE_REMEMBERED : SESSION_MAX_AGE;
+    const token = signTenantToken({ adminId: admin.id, companyId: admin.company_id }, sessionMaxAge);
     store.set(TENANT_SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: SESSION_MAX_AGE,
+      maxAge: sessionMaxAge,
     });
 
     return NextResponse.json({ ok: true });
