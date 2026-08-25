@@ -78,7 +78,7 @@ def deck_11():
         0.5, 4.65, 12.3, 1.3, size=12, color=DARK)
     rect(s, 0.35, 6.15, 12.6, 0.9, fill=LBLUE)
     txt(s, "最終ページURL", 0.5, 6.2, 4, 0.35, size=12, bold=True, color=BLUE)
-    txt(s, "https://rakuraku-kintai-frb6.vercel.app/lp", 0.5, 6.55, 12.3, 0.4, size=13, bold=True, color=DARK)
+    txt(s, "https://rakuraku-kintai.vercel.app/lp", 0.5, 6.55, 12.3, 0.4, size=13, bold=True, color=DARK)
 
     s = prs.slides.add_slide(prs.slide_layouts[6]); rect(s,0,0,13.33,7.5,fill=WHITE)
     hdr(s, "STEP 5：効果チェック（1週間後）", "数値で改善判断", 6, TOTAL)

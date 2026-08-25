@@ -111,7 +111,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 
 1. ブラウザで以下を開く：
    ```
-   https://rakuraku-kintai-frb6.vercel.app/superadmin/login
+   https://rakuraku-kintai.vercel.app/superadmin/login
    ```
 2. ログイン情報を入力：
    - メール：`biccuri5086@gmail.com`
@@ -142,7 +142,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 ## STEP 8：ログイン動作確認（5分）
 
 ### テナント管理者ログイン
-1. https://rakuraku-kintai-frb6.vercel.app/admin/login
+1. https://rakuraku-kintai.vercel.app/admin/login
 2. メール：`biccuri5086@gmail.com`
 3. パスワード：（STEP 7で設定したもの）
 4. ✅ ログイン成功 → 管理ダッシュボードが表示
@@ -164,7 +164,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 ■ プラットフォーム管理者（小原健太・あなた専用）
 ─────────────────────────────────────────
 
-URL    ：https://rakuraku-kintai-frb6.vercel.app/superadmin/login
+URL    ：https://rakuraku-kintai.vercel.app/superadmin/login
 メール ：biccuri5086@gmail.com
 パスワード：Rakurakukintai 2026@
 
@@ -174,7 +174,7 @@ URL    ：https://rakuraku-kintai-frb6.vercel.app/superadmin/login
 ■ ラクラク勤怠株式会社（自社テナント管理者）
 ─────────────────────────────────────────
 
-URL    ：https://rakuraku-kintai-frb6.vercel.app/admin/login
+URL    ：https://rakuraku-kintai.vercel.app/admin/login
 メール ：biccuri5086@gmail.com
 パスワード：Rakurakukintai 2026@
 

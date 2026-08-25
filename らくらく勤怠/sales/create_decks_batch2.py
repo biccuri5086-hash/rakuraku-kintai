@@ -86,7 +86,7 @@ def deck_07():
     s = prs.slides.add_slide(prs.slide_layouts[6]); rect(s,0,0,13.33,7.5,fill=WHITE)
     hdr(s, "管理者ダッシュボードへのアクセス", "PCでもスマホでもOK", 2, TOTAL)
     rect(s, 0.35, 1.7, 12.6, 1.2, fill=NAVY)
-    txt(s, "https://rakuraku-kintai-frb6.vercel.app/admin", 0.5, 1.95, 12.3, 0.7, size=20, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
+    txt(s, "https://rakuraku-kintai.vercel.app/admin", 0.5, 1.95, 12.3, 0.7, size=20, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
     rect(s, 0.35, 3.2, 12.6, 3.5, fill=LGRAY)
     txt(s, "アクセス手順", 0.5, 3.3, 12.5, 0.4, size=14, bold=True, color=DARK)
     txt(s,
