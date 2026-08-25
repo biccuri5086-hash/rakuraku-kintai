@@ -2,8 +2,11 @@
 -- ラクラク勤怠 セキュリティ強化：RLS の取りこぼしを塞ぐ
 -- ============================================================
 -- 本アプリは常に service_role 経由でのみDBに触れ、テナント分離はアプリ側で担保している。
--- したがって正しい状態は「全テーブルで RLS 有効 かつ ポリシー0件」＝ service_role だけが通る。
--- anon キーはブラウザに露出するため、ポリシーが1つでも残っていると外部から読まれる。
+-- したがって正しい状態は「全テーブルで RLS 有効 かつ anon/public 向けポリシー0件」
+-- ＝ service_role だけが通る、である。
+-- anon キーはブラウザに露出するため、anon に許可を出すポリシーが1つでも残っていると
+-- 外部から読まれる。TO service_role を明示したポリシー（rate_limits の service_role_only）は
+-- anon の対象外なので残っていて問題ない。
 --
 -- このマイグレーションは冪等。何度流しても安全。
 -- ============================================================
@@ -38,6 +41,11 @@ end $$;
 --   select tablename from pg_tables
 --   where schemaname = 'public' and rowsecurity = false;
 --
---   -- 残っているポリシー（0行であること）
---   select tablename, policyname from pg_policies where schemaname = 'public';
+--   -- anon / public に許可を出しているポリシー（0行であること）
+--   select tablename, policyname, roles from pg_policies
+--   where schemaname = 'public'
+--     and roles && array['anon','public','authenticated']::name[];
+--
+--   注) 全ポリシーを一覧すると rate_limits の "service_role_only" が1件出るが、
+--       これは TO service_role のため anon からは読めず、正常な状態である。
 -- ============================================================

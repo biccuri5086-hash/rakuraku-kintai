@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { verifyPassword } from "@/lib/password";
+import { selectAdmin, MAX_LOGIN_CANDIDATES, type AdminCandidate } from "@/lib/admin-login";
 import { signTenantToken, TENANT_SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/tenant-session";
 import { checkRateLimit, recordFailure, recordSuccess } from "@/lib/rate-limit";
 import { verifyTOTP } from "@/lib/totp";
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let body: { email?: string; password?: string; totp?: string };
+    let body: { email?: string; password?: string; totp?: string; companyId?: string };
     try {
       body = await req.json();
     } catch {
@@ -36,22 +36,66 @@ export async function POST(req: NextRequest) {
     const email = (body.email ?? "").trim().toLowerCase();
     const password = body.password ?? "";
     const totpCode = body.totp;
+    const requestedCompanyId = typeof body.companyId === "string" ? body.companyId : null;
 
     if (!email || !password) {
       return NextResponse.json({ ok: false, message: "メールとパスワードを入力してください" }, { status: 400 });
     }
 
     const supabase = getSupabaseAdmin();
-    const { data: admin } = await supabase
+    // 同じメールが複数の会社に登録されている場合があるため、1件に絞らず全件取得する。
+    const { data: candidates } = await supabase
       .from("admins")
       .select("id, company_id, password_hash, totp_secret, is_active")
       .eq("email", email)
-      .maybeSingle();
+      .limit(MAX_LOGIN_CANDIDATES);
 
-    if (!admin || !admin.is_active || !verifyPassword(password, admin.password_hash)) {
+    const selection = selectAdmin((candidates ?? []) as AdminCandidate[], password, requestedCompanyId);
+
+    if (selection.kind === "none") {
       await recordFailure(key);
       await logAudit(req, "admin_login_failure", { email });
       return NextResponse.json({ ok: false, message: "メールまたはパスワードが正しくありません" }, { status: 401 });
+    }
+
+    let admin: AdminCandidate;
+    if (selection.kind === "single") {
+      admin = selection.admin;
+    } else {
+      // パスワード照合を通った複数社の管理者が該当した。どの会社としてログインするかを選ばせる。
+      // 会社名を返すのはパスワード認証を通過した後だけなので、メールアドレスからの会社の推測には使えない。
+      const { data: companies } = await supabase
+        .from("companies")
+        .select("id, name, status")
+        .in("id", selection.admins.map((a) => a.company_id));
+
+      const usableNames = new Map(
+        (companies ?? [])
+          .filter((c) => c.status !== "suspended" && c.status !== "cancelled")
+          .map((c) => [c.id as string, c.name as string]),
+      );
+      const usable = selection.admins.filter((a) => usableNames.has(a.company_id));
+
+      if (usable.length === 0) {
+        await logAudit(req, "admin_login_failure", { email, reason: "company_disabled" });
+        return NextResponse.json(
+          { ok: false, message: "この会社のサービスは現在ご利用いただけません" },
+          { status: 403 }
+        );
+      }
+      if (usable.length > 1) {
+        await logAudit(req, "admin_login_company_select", { email, count: usable.length });
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "COMPANY_SELECT",
+            message: "ログインする会社を選択してください",
+            companies: usable.map((a) => ({ id: a.company_id, name: usableNames.get(a.company_id) })),
+          },
+          { status: 401 }
+        );
+      }
+      admin = usable[0];
     }
 
     const { data: company } = await supabase
