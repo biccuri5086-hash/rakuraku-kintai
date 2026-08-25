@@ -10,6 +10,7 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [showTotp, setShowTotp] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [companies, setCompanies] = useState<{ id: string; name: string }[] | null>(null);
   const [companyId, setCompanyId] = useState("");
   const [error, setError] = useState("");
@@ -35,6 +36,7 @@ export default function AdminLoginPage() {
         password,
         companyId: useCompanyId || undefined,
         totp: showTotp ? totp : undefined,
+        remember,
       }),
     });
 
@@ -125,6 +127,20 @@ export default function AdminLoginPage() {
                 autoFocus
                 className="border-2 border-blue-300 rounded-lg px-4 py-3 text-2xl font-mono text-center tracking-widest focus:outline-none focus:border-blue-500 text-gray-800"
               />
+              <label className="flex items-start gap-2 text-xs text-blue-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="mt-0.5 accent-[#06C755]"
+                />
+                <span>
+                  このブラウザを7日間記憶する
+                  <span className="block text-blue-600/80">
+                    次回からメールとパスワードだけでログインできます。共用のパソコンでは外してください。
+                  </span>
+                </span>
+              </label>
             </div>
           )}
 

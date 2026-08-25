@@ -17,6 +17,9 @@ export default function SuperSetup2FAPage() {
   const [testResult, setTestResult] = useState<"none" | "invalid">("none");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [disabling, setDisabling] = useState(false);
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableError, setDisableError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/superadmin/me", { cache: "no-store" }).then((res) => {
@@ -101,18 +104,23 @@ export default function SuperSetup2FAPage() {
   };
 
   const handleDisable = async () => {
-    if (!confirm("2FAを無効化しますか？セキュリティが低下します。")) return;
     setBusy(true);
+    setDisableError(null);
     const res = await fetch("/api/superadmin/2fa-setup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "disable" }),
+      body: JSON.stringify({ action: "disable", password: disablePassword }),
     });
     const data = await res.json();
     setBusy(false);
     if (data.ok && data.disabled) {
-      setMessage("2FAを無効化しました。");
+      setMessage("2FAを無効化しました。パスワードだけでログインできる状態です。");
       setCurrentlyEnabled(false);
+      setDisabling(false);
+      setDisablePassword("");
+      await fetchSetup();
+    } else {
+      setDisableError(data.message ?? "無効化できませんでした");
     }
   };
 
@@ -145,20 +153,56 @@ export default function SuperSetup2FAPage() {
         )}
 
         {currentlyEnabled ? (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={20} className="text-green-600" />
-              <p className="text-sm text-green-800">
-                <strong>2FAは現在有効です。</strong>
-              </p>
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={20} className="text-green-600" />
+                <p className="text-sm text-green-800">
+                  <strong>2FAは現在有効です。</strong>
+                </p>
+              </div>
+              {!disabling && (
+                <button
+                  onClick={() => { setDisabling(true); setDisableError(null); }}
+                  className="text-xs font-bold text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50"
+                >
+                  無効化
+                </button>
+              )}
             </div>
-            <button
-              onClick={handleDisable}
-              disabled={busy}
-              className="text-xs font-bold text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
-            >
-              無効化
-            </button>
+
+            {disabling && (
+              <div className="bg-white border border-red-200 rounded-xl p-3 space-y-2">
+                <p className="text-xs text-red-700 font-bold">
+                  無効化すると、パスワードだけでログインできる状態に戻ります。
+                </p>
+                <p className="text-xs text-slate-600">確認のため、現在のパスワードを入力してください。</p>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={disablePassword}
+                  onChange={(e) => { setDisablePassword(e.target.value); setDisableError(null); }}
+                  placeholder="現在のパスワード"
+                  className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-400 text-slate-800"
+                />
+                {disableError && <p className="text-xs text-red-600 font-bold">{disableError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setDisabling(false); setDisablePassword(""); setDisableError(null); }}
+                    className="flex-1 border border-slate-200 text-slate-700 text-sm font-bold py-2 rounded-lg"
+                  >
+                    やめる
+                  </button>
+                  <button
+                    onClick={handleDisable}
+                    disabled={busy || !disablePassword}
+                    className="flex-1 bg-red-600 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold py-2 rounded-lg"
+                  >
+                    {busy ? "処理中..." : "無効化する"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 flex items-start gap-2">

@@ -10,6 +10,7 @@ export default function SuperAdminLoginPage() {
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [needTotp, setNeedTotp] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +22,7 @@ export default function SuperAdminLoginPage() {
       const res = await fetch("/api/superadmin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, totp: totp || undefined }),
+        body: JSON.stringify({ email, password, totp: totp || undefined, remember }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -89,6 +90,20 @@ export default function SuperAdminLoginPage() {
                 placeholder="123456"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-lg font-mono text-center tracking-widest focus:outline-none focus:border-amber-500"
               />
+              <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer mt-2">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="mt-0.5 accent-amber-500"
+                />
+                <span>
+                  このブラウザを7日間記憶する
+                  <span className="block text-slate-400">
+                    次回からメールとパスワードだけで入れます。共用のパソコンでは外してください。
+                  </span>
+                </span>
+              </label>
             </div>
           )}
 

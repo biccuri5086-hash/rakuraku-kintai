@@ -29,6 +29,7 @@ export type AuditAction =
   | "super_2fa_view"
   | "super_2fa_enabled"
   | "super_2fa_disabled"
+  | "super_2fa_disable_failure"
   | "super_login_2fa_failure"
   | "tenant_violation_attempt"
   | "staff_register"

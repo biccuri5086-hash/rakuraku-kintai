@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPassword, hashPassword } from "@/lib/password";
+import { checkPassword } from "@/lib/password-policy";
 import { logAudit } from "@/lib/audit-log";
 import { errorResponse } from "@/lib/api-handler";
 
@@ -18,8 +19,12 @@ export async function POST(req: NextRequest) {
     if (!current || !next) {
       return NextResponse.json({ ok: false, message: "現在のパスワードと新しいパスワードを入力してください" }, { status: 400 });
     }
-    if (next.length < 8) {
-      return NextResponse.json({ ok: false, message: "新しいパスワードは8文字以上にしてください" }, { status: 400 });
+    const strength = checkPassword(next);
+    if (!strength.ok) {
+      return NextResponse.json(
+        { ok: false, message: strength.errors[0], errors: strength.errors },
+        { status: 400 }
+      );
     }
     if (next === current) {
       return NextResponse.json({ ok: false, message: "現在と違うパスワードにしてください" }, { status: 400 });

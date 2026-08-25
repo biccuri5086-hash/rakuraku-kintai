@@ -3,6 +3,7 @@ import { requireSuperContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { hashPassword } from "@/lib/password";
 import { generatePassword } from "@/lib/generate-password";
+import { checkPassword } from "@/lib/password-policy";
 import { logAudit } from "@/lib/audit-log";
 import { errorResponse } from "@/lib/api-handler";
 
@@ -29,7 +30,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const fullName = (body.full_name ?? "").trim();
 
     if (!isEmail(email)) return NextResponse.json({ ok: false, message: "メールアドレスが不正です" }, { status: 400 });
-    if (password.length < 10) return NextResponse.json({ ok: false, message: "パスワードは10文字以上必要です" }, { status: 400 });
+    const strength = checkPassword(password, { email });
+    if (!strength.ok) {
+      return NextResponse.json(
+        { ok: false, message: strength.errors[0], errors: strength.errors },
+        { status: 400 }
+      );
+    }
     if (!fullName || fullName.length > 50) return NextResponse.json({ ok: false, message: "管理者名を1〜50文字で入力してください" }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
