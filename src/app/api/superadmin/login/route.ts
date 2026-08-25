@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPassword } from "@/lib/password";
-import { signSuperToken, SUPER_SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/tenant-session";
+import { signSuperToken, SUPER_SESSION_COOKIE, SESSION_MAX_AGE, SESSION_MAX_AGE_REMEMBERED } from "@/lib/tenant-session";
 import { checkRateLimit, recordFailure, recordSuccess } from "@/lib/rate-limit";
 import { verifyTOTP } from "@/lib/totp";
+import { TRUST_COOKIE, TRUSTED_DEVICE_MAX_AGE, credentialFingerprint, isTrustedDevice, signTrustToken } from "@/lib/trusted-device";
 import { logAudit } from "@/lib/audit-log";
 import { errorResponse } from "@/lib/api-handler";
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let body: { email?: string; password?: string; totp?: string };
+    let body: { email?: string; password?: string; totp?: string; remember?: boolean };
     try {
       body = await req.json();
     } catch {
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
     const email = (body.email ?? "").trim().toLowerCase();
     const password = body.password ?? "";
     const totpCode = body.totp;
+    const remember = body.remember !== false; // 既定でこのブラウザを記憶する
     if (!email || !password) {
       return NextResponse.json({ ok: false, message: "メールとパスワードを入力してください" }, { status: 400 });
     }
@@ -52,8 +54,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "メールまたはパスワードが正しくありません" }, { status: 401 });
     }
 
-    // 2FAが有効なら6桁コードを検証
-    if (admin.totp_secret) {
+    // 一度6桁を通したブラウザは7日間だけ省略できる。
+    // パスワードや2FAの設定が変わると指紋が変わり、記憶は自動的に無効になる。
+    const fingerprint = credentialFingerprint(admin.password_hash, admin.totp_secret);
+    const store = await cookies();
+    const trusted =
+      !!admin.totp_secret &&
+      isTrustedDevice(store.get(TRUST_COOKIE.super)?.value, "super", admin.id, fingerprint);
+
+    // 2FAが有効で、かつこのブラウザが未記憶なら6桁コードを検証
+    if (admin.totp_secret && !trusted) {
       if (typeof totpCode !== "string" || !totpCode) {
         return NextResponse.json(
           { ok: false, message: "認証コード（6桁）を入力してください", code: "TOTP_REQUIRED" },
@@ -74,16 +84,28 @@ export async function POST(req: NextRequest) {
 
     await recordSuccess(key);
     await supabase.from("super_admins").update({ last_login_at: new Date().toISOString() }).eq("id", admin.id);
-    await logAudit(req, "super_login_success", { email, totp_used: !!admin.totp_secret }, { actorType: "super_admin", actorId: admin.id });
+    if (admin.totp_secret && !trusted && remember) {
+      store.set(TRUST_COOKIE.super, signTrustToken("super", admin.id, fingerprint), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: TRUSTED_DEVICE_MAX_AGE,
+      });
+    }
 
-    const token = signSuperToken({ superAdminId: admin.id });
-    const store = await cookies();
+    await logAudit(req, "super_login_success", { email, totp_used: !!admin.totp_secret, trusted_device: trusted }, { actorType: "super_admin", actorId: admin.id });
+
+    // 「ログインしたままにする」を選んだ場合はセッションを7日保つ。
+    // パスワードは保存しない。次に開いたときログイン済みとして扱うだけ。
+    const sessionMaxAge = remember ? SESSION_MAX_AGE_REMEMBERED : SESSION_MAX_AGE;
+    const token = signSuperToken({ superAdminId: admin.id }, sessionMaxAge);
     store.set(SUPER_SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: SESSION_MAX_AGE,
+      maxAge: sessionMaxAge,
     });
 
     return NextResponse.json({ ok: true });

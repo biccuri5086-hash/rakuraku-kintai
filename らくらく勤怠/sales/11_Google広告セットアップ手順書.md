@@ -22,7 +22,7 @@
 4. 「**目標は何ですか？**」と聞かれたら → 「**ウェブサイトを訪問してもらう**」を選択
 5. 会社名・ウェブサイトを入力：
    - 会社名：`ラクラク勤怠`
-   - ウェブサイト：`https://rakuraku-kintai-frb6.vercel.app/lp`
+   - ウェブサイト：`https://rakuraku-kintai.vercel.app/lp`
 6. 通貨：**日本円（JPY）**
 7. タイムゾーン：**(GMT+09:00) 東京**
 
@@ -98,7 +98,7 @@ LINEを開いてボタン1つ、アプリDL不要。紙タイムカード廃止�
 ### 最終ページURL
 
 ```
-https://rakuraku-kintai-frb6.vercel.app/lp
+https://rakuraku-kintai.vercel.app/lp
 ```
 
 ### 表示URL（任意）

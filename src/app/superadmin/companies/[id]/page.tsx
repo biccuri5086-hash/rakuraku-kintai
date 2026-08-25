@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
+import PasswordRules from "@/components/PasswordRules";
+import { checkPassword } from "@/lib/password-policy";
 import { ArrowLeft, Save, Trash2, UserPlus, Building2, Copy, Check, KeyRound, AlertTriangle } from "lucide-react";
 
 type Company = {
@@ -356,6 +358,8 @@ function AddAdminModal({ companyId, onClose, onAdded }: { companyId: string; onC
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const strength = checkPassword(password, { email });
+    if (!strength.ok) { setError(strength.errors[0]); return; }
     setLoading(true);
     setError(null);
     const res = await fetch(`/api/superadmin/companies/${companyId}/admins`, {
@@ -385,10 +389,11 @@ function AddAdminModal({ companyId, onClose, onAdded }: { companyId: string; onC
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">初期パスワード（10文字以上） *</label>
-            <input type="text" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)}
+            <label className="block text-xs font-semibold text-slate-600 mb-1">初期パスワード *</label>
+            <input type="text" required value={password} onChange={(e) => setPassword(e.target.value)}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-            <p className="text-[10px] text-slate-400 mt-1">このパスワードを管理者に伝えてください。初回ログイン後の変更を推奨します。</p>
+            <div className="mt-1.5"><PasswordRules password={password} email={email} accent="amber" /></div>
+            <p className="text-[10px] text-slate-400 mt-1.5">このパスワードを管理者に伝えてください。初回ログイン後にご本人が変更できます。</p>
           </div>
           {error && <p className="text-red-500 text-xs">{error}</p>}
           <div className="flex gap-2 pt-2">

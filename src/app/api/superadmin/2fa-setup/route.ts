@@ -3,6 +3,7 @@ import { requireSuperContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import QRCode from "qrcode";
 import { generateSecret, buildOtpAuthUrl, verifyTOTP } from "@/lib/totp";
+import { verifyPassword } from "@/lib/password";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     if (guard.error) return guard.error;
     const { superAdminId } = guard.ctx;
 
-    let body: { secret?: string; code?: string; action?: "verify" | "enable" | "disable" };
+    let body: { secret?: string; code?: string; password?: string; action?: "verify" | "enable" | "disable" };
     try {
       body = await req.json();
     } catch {
@@ -62,6 +63,24 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
 
     if (body.action === "disable") {
+      // 解除は本人確認を必須にする。セッションを奪われただけで2FAを外せると、
+      // 2FAを付けた意味が薄れるため（顧客管理者側と同じ扱い）。
+      const { data: me } = await supabase
+        .from("super_admins")
+        .select("password_hash")
+        .eq("id", superAdminId)
+        .maybeSingle();
+
+      if (!me || !body.password || !verifyPassword(body.password, me.password_hash)) {
+        await logAudit(req, "super_2fa_disable_failure", { reason: "password_mismatch" }, {
+          actorType: "super_admin", actorId: superAdminId,
+        });
+        return NextResponse.json(
+          { ok: false, message: "パスワードが正しくありません" },
+          { status: 401 }
+        );
+      }
+
       await supabase.from("super_admins").update({ totp_secret: null }).eq("id", superAdminId);
       await logAudit(req, "super_2fa_disabled", undefined, {
         actorType: "super_admin", actorId: superAdminId,

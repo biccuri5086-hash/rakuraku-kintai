@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PasswordRules from "@/components/PasswordRules";
+import { checkPassword } from "@/lib/password-policy";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, ArrowLeft, CheckCircle } from "lucide-react";
 
@@ -27,7 +29,8 @@ export default function SuperPasswordPage() {
   const handleSave = async () => {
     setError(null);
     if (!current || !next) return setError("すべての項目を入力してください");
-    if (next.length < 8) return setError("新しいパスワードは8文字以上にしてください");
+    const strength = checkPassword(next);
+    if (!strength.ok) return setError(strength.errors[0]);
     if (next !== confirm) return setError("新しいパスワード（確認）が一致しません");
     setSaving(true);
     const res = await fetch("/api/superadmin/change-password", {
@@ -84,7 +87,8 @@ export default function SuperPasswordPage() {
             </p>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <PwField label="現在のパスワード" value={current} onChange={setCurrent} />
-            <PwField label="新しいパスワード（8文字以上）" value={next} onChange={setNext} />
+            <PwField label="新しいパスワード" value={next} onChange={setNext} />
+            <PasswordRules password={next} accent="amber" />
             <PwField label="新しいパスワード（確認）" value={confirm} onChange={setConfirm} />
             <button
               onClick={handleSave}

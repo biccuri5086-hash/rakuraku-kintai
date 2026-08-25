@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Shield } from "lucide-react";
 
@@ -10,8 +10,18 @@ export default function SuperAdminLoginPage() {
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [needTotp, setNeedTotp] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // ログインしたままにしている場合、この画面を開いたらそのまま運営画面へ進む
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/superadmin/me", { cache: "no-store" })
+      .then((res) => { if (!cancelled && res.ok) router.replace("/superadmin"); })
+      .catch(() => { /* 未ログインならこの画面のまま */ });
+    return () => { cancelled = true; };
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,7 +31,7 @@ export default function SuperAdminLoginPage() {
       const res = await fetch("/api/superadmin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, totp: totp || undefined }),
+        body: JSON.stringify({ email, password, totp: totp || undefined, remember }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -74,6 +84,21 @@ export default function SuperAdminLoginPage() {
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
             />
           </div>
+
+          <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="mt-0.5 accent-amber-500"
+            />
+            <span>
+              このブラウザで7日間ログインしたままにする
+              <span className="block text-slate-400">
+                次回から入力なしで開けます。共用のパソコンでは外してください。
+              </span>
+            </span>
+          </label>
 
           {needTotp && (
             <div>
