@@ -22,6 +22,7 @@ export type AuditAction =
   | "super_company_delete"
   | "super_admin_create"
   | "super_admin_delete"
+  | "super_admin_password_reset"
   | "super_2fa_view"
   | "super_2fa_enabled"
   | "super_2fa_disabled"

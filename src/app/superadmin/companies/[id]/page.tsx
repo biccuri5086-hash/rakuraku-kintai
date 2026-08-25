@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Trash2, UserPlus, Building2, Copy, Check } from "lucide-react";
+import { ArrowLeft, Save, Trash2, UserPlus, Building2, Copy, Check, KeyRound, AlertTriangle } from "lucide-react";
 
 type Company = {
   id: string;
@@ -57,6 +57,8 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
   const [saving, setSaving] = useState(false);
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [issued, setIssued] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -105,6 +107,24 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
     if (!confirm(`管理者「${name}」を削除しますか？`)) return;
     await fetch(`/api/superadmin/companies/${id}/admins?admin_id=${adminId}`, { method: "DELETE" });
     await fetchData();
+  };
+
+  const resetAdminPassword = async (admin: AdminUser) => {
+    if (!confirm(`「${admin.full_name}」のパスワードを再発行します。\n\n今までのパスワードはこの操作で使えなくなります。\n新しいパスワードは一度しか表示されません。\n\n実行しますか？`)) return;
+    setResettingId(admin.id);
+    const res = await fetch(`/api/superadmin/companies/${id}/admins`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ admin_id: admin.id }),
+    });
+    const data = await res.json();
+    setResettingId(null);
+    if (data.ok) {
+      setIssued({ name: admin.full_name, email: admin.email, password: data.password });
+      await fetchData();
+    } else {
+      alert(data.message ?? "再発行に失敗しました");
+    }
   };
 
   const copyInvite = async () => {
@@ -208,10 +228,19 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
                     <p className="text-xs text-slate-500">{a.email}</p>
                     {a.last_login_at && <p className="text-[10px] text-slate-400">最終ログイン：{new Date(a.last_login_at).toLocaleString("ja-JP")}</p>}
                   </div>
-                  <button onClick={() => removeAdmin(a.id, a.full_name)}
-                    className="text-red-500 hover:text-red-700">
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => resetAdminPassword(a)}
+                      disabled={resettingId === a.id}
+                      title="パスワードを再発行"
+                      className="flex items-center gap-1 text-amber-600 hover:text-amber-800 text-xs font-bold border border-amber-300 rounded-lg px-2 py-1.5 disabled:opacity-50">
+                      <KeyRound size={14} /> {resettingId === a.id ? "発行中..." : "パスワード再発行"}
+                    </button>
+                    <button onClick={() => removeAdmin(a.id, a.full_name)}
+                      title="この管理者を削除"
+                      className="text-red-500 hover:text-red-700 p-1.5">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -233,6 +262,56 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
       {showAddAdmin && (
         <AddAdminModal companyId={id} onClose={() => setShowAddAdmin(false)} onAdded={() => { setShowAddAdmin(false); fetchData(); }} />
       )}
+
+      {issued && <IssuedPasswordModal issued={issued} onClose={() => setIssued(null)} />}
+    </div>
+  );
+}
+
+// 再発行したパスワードの表示。平文はサーバから一度しか返らないため、
+// 閉じる前に控えてもらう必要がある。閉じたら二度と表示できない。
+function IssuedPasswordModal({
+  issued, onClose,
+}: { issued: { name: string; email: string; password: string }; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(issued.password);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <h2 className="text-lg font-bold text-slate-800 mb-1">新しいパスワードを発行しました</h2>
+        <p className="text-xs text-slate-500 mb-4">{issued.name}（{issued.email}）</p>
+
+        <div className="bg-slate-900 rounded-xl p-4 mb-3">
+          <p className="text-[10px] text-slate-400 mb-1.5">新しいパスワード</p>
+          <p className="text-lg font-mono text-white break-all select-all">{issued.password}</p>
+        </div>
+
+        <button onClick={copy}
+          className="w-full flex items-center justify-center gap-1.5 border-2 border-slate-200 hover:border-slate-400 text-slate-700 font-bold py-2.5 rounded-lg mb-4">
+          {copied ? <><Check size={16} className="text-green-600" /> コピーしました</> : <><Copy size={16} /> パスワードをコピー</>}
+        </button>
+
+        <div className="flex gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+          <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-800 space-y-1">
+            <p className="font-bold">この画面を閉じると二度と表示できません。</p>
+            <p>先に控えてから閉じてください。控え忘れたときは、もう一度再発行すれば新しいものを発行できます。</p>
+            <p>ご本人にはログイン後、管理画面のパスワード変更からご自身のパスワードへ変更するようお伝えください。</p>
+            <p>直前に5回以上ログインに失敗している場合、最大15分ほどログインできないことがあります。時間をおいてお試しください。</p>
+          </div>
+        </div>
+
+        <button onClick={onClose}
+          className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-lg">
+          控えたので閉じる
+        </button>
+      </div>
     </div>
   );
 }
