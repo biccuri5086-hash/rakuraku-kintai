@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, AlertCircle, KeyRound, Mail } from "lucide-react";
+import { Lock, AlertCircle, KeyRound, Mail, Building2 } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -10,28 +10,46 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [showTotp, setShowTotp] = useState(false);
+  const [companies, setCompanies] = useState<{ id: string; name: string }[] | null>(null);
+  const [companyId, setCompanyId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  // selectedCompanyId は会社選択ボタンから直接渡す。setCompanyId の反映を待つと
+  // 1回目の送信に間に合わないため。
+  const handleLogin = async (selectedCompanyId?: string) => {
     if (!email || !password || loading) return;
     if (showTotp && totp.length !== 6) {
       setError("6桁の認証コードを入力してください");
       return;
     }
+    const useCompanyId = selectedCompanyId ?? companyId;
     setLoading(true);
     setError("");
 
     const res = await fetch("/api/admin/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, totp: showTotp ? totp : undefined }),
+      body: JSON.stringify({
+        email,
+        password,
+        companyId: useCompanyId || undefined,
+        totp: showTotp ? totp : undefined,
+      }),
     });
 
     const data = await res.json();
 
     if (data.ok) {
       router.replace("/admin");
+      return;
+    }
+
+    // 同じメールが複数の会社に登録されている場合。パスワードは照合済み。
+    if (data.code === "COMPANY_SELECT") {
+      setCompanies(data.companies ?? []);
+      setError("ログインする会社を選択してください");
+      setLoading(false);
       return;
     }
 
@@ -45,6 +63,8 @@ export default function AdminLoginPage() {
     setError(data.message ?? "ログインに失敗しました");
     if (data.code !== "TOTP_INVALID") {
       setPassword("");
+      setCompanies(null);
+      setCompanyId("");
     }
     setTotp("");
     setLoading(false);
@@ -72,7 +92,7 @@ export default function AdminLoginPage() {
               placeholder="メールアドレス"
               autoComplete="username"
               autoFocus
-              disabled={showTotp}
+              disabled={showTotp || !!companies}
               className="w-full border-2 border-gray-200 rounded-xl pl-9 pr-4 py-3 text-base focus:outline-none focus:border-[#06C755] text-gray-800 disabled:bg-gray-50"
             />
           </div>
@@ -84,7 +104,7 @@ export default function AdminLoginPage() {
             onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             placeholder="パスワード"
             autoComplete="current-password"
-            disabled={showTotp}
+            disabled={showTotp || !!companies}
             className="border-2 border-gray-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-[#06C755] text-gray-800 disabled:bg-gray-50"
           />
 
@@ -108,19 +128,39 @@ export default function AdminLoginPage() {
             </div>
           )}
 
+          {companies && !showTotp && (
+            <div className="flex flex-col gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <label className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                <Building2 size={14} /> ログインする会社を選択
+              </label>
+              {companies.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => { setCompanyId(c.id); handleLogin(c.id); }}
+                  disabled={loading}
+                  className="text-left border-2 border-amber-300 bg-white rounded-lg px-4 py-2.5 text-sm font-medium text-gray-800 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {error && (
             <div className="flex items-center gap-1.5 text-red-500 text-sm">
               <AlertCircle size={14} />
               <span>{error}</span>
             </div>
           )}
-          <button
-            onClick={handleLogin}
-            disabled={!email || !password || loading || (showTotp && totp.length !== 6)}
-            className="bg-[#06C755] disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-xl py-3 font-bold transition-all active:scale-95"
-          >
-            {loading ? "確認中..." : "ログイン"}
-          </button>
+          {!(companies && !showTotp) && (
+            <button
+              onClick={() => handleLogin()}
+              disabled={!email || !password || loading || (showTotp && totp.length !== 6)}
+              className="bg-[#06C755] disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-xl py-3 font-bold transition-all active:scale-95"
+            >
+              {loading ? "確認中..." : "ログイン"}
+            </button>
+          )}
 
           <p className="text-[10px] text-gray-400 text-center mt-2">
             アカウントをお持ちでない場合はサービス提供元にお問い合わせください

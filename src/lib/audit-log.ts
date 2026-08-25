@@ -6,6 +6,7 @@ export type AuditAction =
   | "admin_login_failure"
   | "admin_login_2fa_failure"
   | "admin_login_rate_limited"
+  | "admin_login_company_select"
   | "admin_logout"
   | "admin_dashboard_view"
   | "admin_2fa_setup_view"
