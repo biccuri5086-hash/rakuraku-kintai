@@ -35,7 +35,8 @@ export default function SuperAdminLoginPage() {
       });
       const data = await res.json();
       if (data.ok) {
-        router.replace("/superadmin");
+        // 今のパスワードが条件を満たしていない場合は、まず変更画面へ案内する
+        router.replace(data.passwordNeedsUpdate ? "/superadmin/password?weak=1" : "/superadmin");
       } else if (data.code === "TOTP_REQUIRED") {
         setNeedTotp(true);
         setError("認証アプリの6桁コードを入力してください");

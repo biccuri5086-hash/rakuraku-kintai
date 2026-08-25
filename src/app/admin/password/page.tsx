@@ -15,6 +15,12 @@ export default function ChangePasswordPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  // ログイン時に「今のパスワードが条件を満たしていない」と判定されて来た場合
+  const [weak, setWeak] = useState(false);
+
+  useEffect(() => {
+    setWeak(new URLSearchParams(window.location.search).get("weak") === "1");
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
@@ -70,6 +76,21 @@ export default function ChangePasswordPage() {
       </header>
 
       <main className="max-w-md mx-auto px-4 py-8">
+        {weak && !done && (
+          <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+            <p className="text-sm font-bold text-orange-800 mb-1">パスワードの変更をお願いします</p>
+            <p className="text-xs text-orange-700 leading-relaxed">
+              今お使いのパスワードが、現在の条件（12文字以上・英字・数字・記号）を満たしていません。
+              管理画面ではスタッフの給与額や連絡先を扱うため、この機会に変更してください。
+            </p>
+            <button
+              onClick={() => router.replace("/admin")}
+              className="mt-2.5 text-xs font-bold text-[#06C755] underline underline-offset-2"
+            >
+              あとで変更する
+            </button>
+          </div>
+        )}
         {done ? (
           <div className="bg-white rounded-2xl shadow p-6 text-center">
             <CheckCircle size={40} className="text-[#06C755] mx-auto mb-3" />
