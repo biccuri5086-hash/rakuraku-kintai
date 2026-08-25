@@ -52,7 +52,8 @@ export default function AdminLoginPage() {
     const data = await res.json();
 
     if (data.ok) {
-      router.replace("/admin");
+      // 今のパスワードが条件を満たしていない人は、まず変更画面へ案内する
+      router.replace(data.passwordNeedsUpdate ? "/admin/password?weak=1" : "/admin");
       return;
     }
 

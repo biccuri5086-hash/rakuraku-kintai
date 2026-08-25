@@ -5,6 +5,7 @@ import { verifyPassword } from "@/lib/password";
 import { signSuperToken, SUPER_SESSION_COOKIE, SESSION_MAX_AGE, SESSION_MAX_AGE_REMEMBERED } from "@/lib/tenant-session";
 import { checkRateLimit, recordFailure, recordSuccess } from "@/lib/rate-limit";
 import { verifyTOTP } from "@/lib/totp";
+import { checkPassword } from "@/lib/password-policy";
 import { TRUST_COOKIE, TRUSTED_DEVICE_MAX_AGE, credentialFingerprint, isTrustedDevice, signTrustToken } from "@/lib/trusted-device";
 import { logAudit } from "@/lib/audit-log";
 import { errorResponse } from "@/lib/api-handler";
@@ -108,7 +109,11 @@ export async function POST(req: NextRequest) {
       maxAge: sessionMaxAge,
     });
 
-    return NextResponse.json({ ok: true });
+    // いま入力されたパスワードが今の条件を満たしているかを見る。
+    // 満たしていない既存利用者は締め出さず、ログイン後に変更を促す。
+    const passwordNeedsUpdate = !checkPassword(password, { email: email }).ok;
+
+    return NextResponse.json({ ok: true, passwordNeedsUpdate });
   } catch (e) {
     return errorResponse(e);
   }
