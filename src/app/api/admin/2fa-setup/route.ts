@@ -6,6 +6,7 @@ import { generateSecret, buildOtpAuthUrl, verifyTOTP } from "@/lib/totp";
 import { verifyPassword } from "@/lib/password";
 import { logAudit } from "@/lib/audit-log";
 import { errorResponse } from "@/lib/api-handler";
+import { revokeOtherSessions } from "@/lib/server-session";
 
 // 顧客（派遣会社）の管理者が自分で2FAを設定する。
 // 管理画面は給与額と個人情報を扱うため、パスワード1つで守るには重い。
@@ -106,6 +107,7 @@ export async function POST(req: NextRequest) {
         .eq("id", adminId)
         .eq("company_id", companyId);
 
+      await revokeOtherSessions("admin", adminId, guard.ctx.sessionId);
       await logAudit(req, "admin_2fa_disabled", undefined, {
         actorType: "admin", actorId: adminId, companyId,
       });
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
         .eq("id", adminId)
         .eq("company_id", companyId);
 
+      await revokeOtherSessions("admin", adminId, guard.ctx.sessionId);
       await logAudit(req, "admin_2fa_enabled", undefined, {
         actorType: "admin", actorId: adminId, companyId,
       });

@@ -5,6 +5,7 @@ import { verifyPassword, hashPassword } from "@/lib/password";
 import { checkPassword } from "@/lib/password-policy";
 import { logAudit } from "@/lib/audit-log";
 import { errorResponse } from "@/lib/api-handler";
+import { revokeOtherSessions } from "@/lib/server-session";
 
 // 超管理者が自分でパスワードを変更する（現在のパスワード必須＝本人確認）
 export async function POST(req: NextRequest) {
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest) {
       .update({ password_hash: hashPassword(next) })
       .eq("id", ctx.superAdminId);
     if (error) throw error;
+
+    await revokeOtherSessions("super_admin", ctx.superAdminId, ctx.sessionId);
 
     await logAudit(req, "super_password_changed", {}, {
       actorType: "super_admin", actorId: ctx.superAdminId,

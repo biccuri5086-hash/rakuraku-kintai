@@ -5,6 +5,7 @@ import { verifyPassword, hashPassword } from "@/lib/password";
 import { checkPassword } from "@/lib/password-policy";
 import { logAudit } from "@/lib/audit-log";
 import { errorResponse } from "@/lib/api-handler";
+import { revokeOtherSessions } from "@/lib/server-session";
 
 // 管理者が自分でパスワードを変更する（現在のパスワード必須＝本人確認）
 export async function POST(req: NextRequest) {
@@ -49,6 +50,9 @@ export async function POST(req: NextRequest) {
       .update({ password_hash: hashPassword(next) })
       .eq("id", ctx.adminId);
     if (error) throw error;
+
+    // 認証情報が変わったので、この端末以外のセッションを全て失効させる。
+    await revokeOtherSessions("admin", ctx.adminId, ctx.sessionId);
 
     await logAudit(req, "admin_password_changed", {}, {
       actorType: "admin", actorId: ctx.adminId, companyId: ctx.companyId,

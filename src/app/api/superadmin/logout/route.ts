@@ -3,10 +3,12 @@ import { cookies } from "next/headers";
 import { SUPER_SESSION_COOKIE } from "@/lib/tenant-session";
 import { getSuperContext } from "@/lib/tenant-context";
 import { logAudit } from "@/lib/audit-log";
+import { revokeServerSession } from "@/lib/server-session";
 
 export async function POST(req: NextRequest) {
   const ctx = await getSuperContext();
   if (ctx) {
+    await revokeServerSession(ctx.sessionId);
     await logAudit(req, "super_logout", undefined, { actorType: "super_admin", actorId: ctx.superAdminId });
   }
   const store = await cookies();

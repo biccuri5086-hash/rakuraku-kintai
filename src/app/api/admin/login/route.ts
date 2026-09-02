@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { selectAdmin, MAX_LOGIN_CANDIDATES, type AdminCandidate } from "@/lib/admin-login";
-import { signTenantToken, TENANT_SESSION_COOKIE, SESSION_MAX_AGE, SESSION_MAX_AGE_REMEMBERED } from "@/lib/tenant-session";
+import { TENANT_SESSION_COOKIE } from "@/lib/tenant-session";
+import { createServerSession } from "@/lib/server-session";
+import { getClientInfo } from "@/lib/tenant-context";
 import { checkRateLimit, recordFailure, recordSuccess } from "@/lib/rate-limit";
 import { verifyTOTP } from "@/lib/totp";
 import { checkPassword } from "@/lib/password-policy";
@@ -156,16 +158,24 @@ export async function POST(req: NextRequest) {
       actorType: "admin", actorId: admin.id, companyId: admin.company_id,
     });
 
-    // 「ログインしたままにする」を選んだ場合はセッションを7日保つ。
-    // パスワードは保存しない。次に開いたときログイン済みとして扱うだけ。
-    const sessionMaxAge = remember ? SESSION_MAX_AGE_REMEMBERED : SESSION_MAX_AGE;
-    const token = signTenantToken({ adminId: admin.id, companyId: admin.company_id }, sessionMaxAge);
-    store.set(TENANT_SESSION_COOKIE, token, {
+    // サーバ側セッションを発行する（案C）。Cookieには不透明なトークンだけを入れ、
+    // 状態はDB(auth_sessions)で持つ。remember=true なら使い続ける限り継続（スライド）し、
+    // 放置しても絶対上限で失効。パスワード・2FA変更時に他端末を一括失効できる。
+    const { ip, ua } = getClientInfo(req);
+    const { cookieValue, maxAge } = await createServerSession({
+      actorType: "admin",
+      actorId: admin.id,
+      companyId: admin.company_id,
+      remember,
+      userAgent: ua,
+      ip,
+    });
+    store.set(TENANT_SESSION_COOKIE, cookieValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: sessionMaxAge,
+      maxAge,
     });
 
     // いま入力されたパスワードが今の条件を満たしているかを見る。

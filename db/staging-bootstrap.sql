@@ -1208,3 +1208,25 @@ insert into schema_migrations(name) values
   ('0004_phase_b_paid_leave.sql'), ('0005_phase_c_ledger_fields.sql')
 on conflict (name) do nothing;
 -- 完了。以降は db/migrations/ に 0006 以降を足せば staging にも同じ手順で反映できます。
+
+-- ===================================================================
+-- ▼▼▼ 0007_server_sessions.sql ▼▼▼
+-- ===================================================================
+create table if not exists auth_sessions (
+  id                  uuid primary key default gen_random_uuid(),
+  actor_type          text not null check (actor_type in ('admin', 'super_admin')),
+  actor_id            text not null,
+  company_id          uuid,
+  token_hash          text not null,
+  idle_ttl_seconds    integer not null,
+  idle_expires_at     timestamptz not null,
+  absolute_expires_at timestamptz not null,
+  last_used_at        timestamptz not null default now(),
+  created_at          timestamptz not null default now(),
+  revoked_at          timestamptz,
+  user_agent          text,
+  ip                  text
+);
+create index if not exists idx_auth_sessions_actor on auth_sessions (actor_type, actor_id);
+create index if not exists idx_auth_sessions_sweep on auth_sessions (absolute_expires_at);
+alter table auth_sessions enable row level security;

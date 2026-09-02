@@ -6,6 +6,7 @@ import { generateSecret, buildOtpAuthUrl, verifyTOTP } from "@/lib/totp";
 import { verifyPassword } from "@/lib/password";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
+import { revokeOtherSessions } from "@/lib/server-session";
 
 // 現在の状態＋新しいシークレット候補を返す
 export async function GET(req: NextRequest) {
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest) {
       }
 
       await supabase.from("super_admins").update({ totp_secret: null }).eq("id", superAdminId);
+      await revokeOtherSessions("super_admin", superAdminId, guard.ctx.sessionId);
       await logAudit(req, "super_2fa_disabled", undefined, {
         actorType: "super_admin", actorId: superAdminId,
       });
@@ -99,6 +101,7 @@ export async function POST(req: NextRequest) {
 
     if (body.action === "enable") {
       await supabase.from("super_admins").update({ totp_secret: body.secret }).eq("id", superAdminId);
+      await revokeOtherSessions("super_admin", superAdminId, guard.ctx.sessionId);
       await logAudit(req, "super_2fa_enabled", undefined, {
         actorType: "super_admin", actorId: superAdminId,
       });

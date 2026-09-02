@@ -4,35 +4,36 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import {
   TENANT_SESSION_COOKIE,
   SUPER_SESSION_COOKIE,
-  verifyTenantToken,
-  verifySuperToken,
   TenantSessionPayload,
   SuperSessionPayload,
 } from "./tenant-session";
+import { resolveServerSession } from "./server-session";
 
 export type TenantContext = {
   adminId: string;
   companyId: string;
+  sessionId: string;
 };
 
 export type SuperContext = {
   superAdminId: string;
+  sessionId: string;
 };
 
 export async function getTenantContext(): Promise<TenantContext | null> {
   const store = await cookies();
   const token = store.get(TENANT_SESSION_COOKIE)?.value;
-  const payload = verifyTenantToken(token);
-  if (!payload) return null;
-  return { adminId: payload.adminId, companyId: payload.companyId };
+  const session = await resolveServerSession(token);
+  if (!session || session.actorType !== "admin" || !session.companyId) return null;
+  return { adminId: session.actorId, companyId: session.companyId, sessionId: session.sessionId };
 }
 
 export async function getSuperContext(): Promise<SuperContext | null> {
   const store = await cookies();
   const token = store.get(SUPER_SESSION_COOKIE)?.value;
-  const payload = verifySuperToken(token);
-  if (!payload) return null;
-  return { superAdminId: payload.superAdminId };
+  const session = await resolveServerSession(token);
+  if (!session || session.actorType !== "super_admin") return null;
+  return { superAdminId: session.actorId, sessionId: session.sessionId };
 }
 
 export async function requireTenantContext(): Promise<
