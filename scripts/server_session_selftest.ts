@@ -4,9 +4,11 @@
 import {
   generateSession, hashSecret, parseSessionCookie, secretMatches,
   computeExpiries, evaluateSession, cookieMaxAge,
+  classifyPresentedSecret, shouldRotate, remainingMaxAge,
   IDLE_MAX_AGE_REMEMBERED, ABSOLUTE_MAX_AGE_REMEMBERED,
   IDLE_MAX_AGE_SESSION, SLIDE_THROTTLE_SEC,
-  type SessionRow,
+  ROTATE_INTERVAL_SEC, PREV_GRACE_SEC,
+  type SessionRow, type RotationRow,
 } from "../src/lib/server-session";
 
 let failed = 0;
@@ -96,6 +98,46 @@ const row = (over: Partial<SessionRow>): SessionRow => ({
 
   ok("壊れた日時は malformed",
     evaluateSession(row({ idle_expires_at: "not-a-date" }), NOW).state === "malformed");
+}
+
+// --- シークレット分類（ローテーション & 盗用検知） ---
+{
+  const curSecret = "current-secret-value";
+  const prevSecret = "previous-secret-value";
+  const rrow = (over: Partial<RotationRow>): RotationRow => ({
+    token_hash: hashSecret(curSecret),
+    prev_token_hash: hashSecret(prevSecret),
+    rotated_at: iso(NOW),
+    created_at: iso(NOW - 1000),
+    ...over,
+  });
+  ok("現在のトークンは current", classifyPresentedSecret(rrow({}), curSecret, NOW + 1000) === "current");
+  ok("猶予内の旧トークンは prev_grace",
+    classifyPresentedSecret(rrow({}), prevSecret, NOW + (PREV_GRACE_SEC - 10) * 1000) === "prev_grace");
+  ok("猶予切れの旧トークンは prev_stale（盗用疑い）",
+    classifyPresentedSecret(rrow({}), prevSecret, NOW + (PREV_GRACE_SEC + 60) * 1000) === "prev_stale");
+  ok("未知のトークンは none", classifyPresentedSecret(rrow({}), "unknown", NOW + 1000) === "none");
+  ok("prevなしの未知は none", classifyPresentedSecret(rrow({ prev_token_hash: null }), "x", NOW) === "none");
+}
+
+// --- ローテーション要否 ---
+{
+  const rr = (over: Partial<RotationRow>): RotationRow => ({
+    token_hash: "h", prev_token_hash: null, rotated_at: null, created_at: iso(NOW), ...over,
+  });
+  ok("間隔超過でローテーション必要",
+    shouldRotate(rr({ rotated_at: iso(NOW - (ROTATE_INTERVAL_SEC + 60) * 1000) }), NOW) === true);
+  ok("間隔内はローテーション不要",
+    shouldRotate(rr({ rotated_at: iso(NOW - 60 * 1000) }), NOW) === false);
+  ok("rotated_atなしは created_at 基準で判定",
+    shouldRotate(rr({ created_at: iso(NOW - (ROTATE_INTERVAL_SEC + 60) * 1000) }), NOW) === true);
+  ok("壊れた日時はローテーションしない", shouldRotate(rr({ rotated_at: "bad", created_at: "bad" }), NOW) === false);
+}
+
+// --- 残りMax-Age ---
+{
+  ok("将来の絶対期限は正の秒数", remainingMaxAge(iso(NOW + 3600 * 1000), NOW) === 3600);
+  ok("過去の絶対期限は0", remainingMaxAge(iso(NOW - 1000), NOW) === 0);
 }
 
 if (failed > 0) { console.log(`\n${failed} test(s) failed`); process.exit(1); }

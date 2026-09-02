@@ -20,11 +20,34 @@ export type SuperContext = {
   sessionId: string;
 };
 
+// ローテーションで新しいシークレットが発行されたら、応答Cookieを差し替える。
+// route handler 内から呼ばれる前提（Server Component からは呼ばれない）。
+// 万一書き込み不可の文脈でも認証は継続できるよう、失敗は握りつぶす。
+function applyRotatedCookie(
+  store: Awaited<ReturnType<typeof cookies>>,
+  name: string,
+  rotated: { value: string; maxAge: number } | undefined
+): void {
+  if (!rotated) return;
+  try {
+    store.set(name, rotated.value, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: rotated.maxAge,
+    });
+  } catch {
+    /* Cookie を設定できない文脈（レンダリング中など）では次回の利用時に再ローテーションされる */
+  }
+}
+
 export async function getTenantContext(): Promise<TenantContext | null> {
   const store = await cookies();
   const token = store.get(TENANT_SESSION_COOKIE)?.value;
   const session = await resolveServerSession(token);
   if (!session || session.actorType !== "admin" || !session.companyId) return null;
+  applyRotatedCookie(store, TENANT_SESSION_COOKIE, session.rotatedCookie);
   return { adminId: session.actorId, companyId: session.companyId, sessionId: session.sessionId };
 }
 
@@ -33,6 +56,7 @@ export async function getSuperContext(): Promise<SuperContext | null> {
   const token = store.get(SUPER_SESSION_COOKIE)?.value;
   const session = await resolveServerSession(token);
   if (!session || session.actorType !== "super_admin") return null;
+  applyRotatedCookie(store, SUPER_SESSION_COOKIE, session.rotatedCookie);
   return { superAdminId: session.actorId, sessionId: session.sessionId };
 }
 

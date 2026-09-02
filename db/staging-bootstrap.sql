@@ -1225,7 +1225,9 @@ create table if not exists auth_sessions (
   created_at          timestamptz not null default now(),
   revoked_at          timestamptz,
   user_agent          text,
-  ip                  text
+  ip                  text,
+  prev_token_hash     text,
+  rotated_at          timestamptz
 );
 create index if not exists idx_auth_sessions_actor on auth_sessions (actor_type, actor_id);
 create index if not exists idx_auth_sessions_sweep on auth_sessions (absolute_expires_at);

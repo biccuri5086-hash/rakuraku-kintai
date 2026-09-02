@@ -20,6 +20,12 @@ export const IDLE_MAX_AGE_SESSION = 60 * 60 * 12; // 12時間
 export const ABSOLUTE_MAX_AGE_SESSION = 60 * 60 * 12; // 12時間
 // スライド更新のDB書き込みを間引く（毎リクエスト書かない）。
 export const SLIDE_THROTTLE_SEC = 60 * 5;
+// シークレットのローテーション間隔。頻繁に回すとレースが増えるので控えめに。
+export const ROTATE_INTERVAL_SEC = 60 * 60 * 24; // 24時間ごと
+// ローテーション直後、並行して飛んでいた旧Cookieのリクエストを許容する猶予。
+export const PREV_GRACE_SEC = 120;
+// 失効済み行を監査目的で少し残してから物理削除するまでの保持期間。
+export const REVOKED_RETENTION_SEC = 60 * 60 * 24 * 7; // 7日
 
 const TABLE = "auth_sessions";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -101,6 +107,45 @@ export function cookieMaxAge(remember: boolean): number {
   return remember ? ABSOLUTE_MAX_AGE_REMEMBERED : ABSOLUTE_MAX_AGE_SESSION;
 }
 
+// 残りの絶対期限からCookieのMax-Ageを算出（ローテーション時の再設定用）。
+export function remainingMaxAge(absoluteExpiresAt: string, nowMs: number): number {
+  const remain = Math.floor((Date.parse(absoluteExpiresAt) - nowMs) / 1000);
+  return remain > 0 ? remain : 0;
+}
+
+export type RotationRow = {
+  token_hash: string;
+  prev_token_hash: string | null;
+  rotated_at: string | null;
+  created_at: string;
+};
+
+// 提示されたシークレットが、現在/直前(猶予内)/直前(猶予切れ=盗用疑い)/不一致 のどれか。
+// - current:    現在のトークン
+// - prev_grace: ローテーション直後の猶予内に届いた旧トークン（正常な並行リクエスト）
+// - prev_stale: 猶予を過ぎた旧トークンの再利用（＝盗用の疑い→セッション失効へ）
+// - none:       いずれにも一致しない（ただの無効）
+export type SecretClass = "current" | "prev_grace" | "prev_stale" | "none";
+
+export function classifyPresentedSecret(row: RotationRow, presentedSecret: string, nowMs: number): SecretClass {
+  if (secretMatches(presentedSecret, row.token_hash)) return "current";
+  if (row.prev_token_hash && secretMatches(presentedSecret, row.prev_token_hash)) {
+    const rotatedMs = row.rotated_at ? Date.parse(row.rotated_at) : NaN;
+    if (Number.isFinite(rotatedMs) && nowMs <= rotatedMs + PREV_GRACE_SEC * 1000) {
+      return "prev_grace";
+    }
+    return "prev_stale";
+  }
+  return "none";
+}
+
+// 最後のローテーション（無ければ作成時）から一定間隔を過ぎていれば回す。
+export function shouldRotate(row: RotationRow, nowMs: number): boolean {
+  const base = Date.parse(row.rotated_at ?? row.created_at);
+  if (!Number.isFinite(base)) return false;
+  return nowMs - base >= ROTATE_INTERVAL_SEC * 1000;
+}
+
 // ── DB I/O（薄いラッパー） ──────────────────────────────────
 export async function createServerSession(input: {
   actorType: SessionActorType;
@@ -138,9 +183,11 @@ export type ResolvedSession = {
   actorType: SessionActorType;
   actorId: string;
   companyId: string | null;
+  // ローテーションが起きた場合、呼び出し側(route handler)が新しいCookieを再設定する。
+  rotatedCookie?: { value: string; maxAge: number };
 };
 
-// Cookie値から有効なセッションを解決し、必要ならスライド更新する。無効なら null。
+// Cookie値から有効なセッションを解決し、必要ならスライド更新・ローテーションする。無効なら null。
 export async function resolveServerSession(cookieValue: string | undefined | null): Promise<ResolvedSession | null> {
   const parsed = parseSessionCookie(cookieValue);
   if (!parsed) return null;
@@ -148,30 +195,72 @@ export async function resolveServerSession(cookieValue: string | undefined | nul
 
   const { data: row } = await supabase
     .from(TABLE)
-    .select("id, actor_type, actor_id, company_id, token_hash, revoked_at, idle_expires_at, absolute_expires_at, last_used_at, idle_ttl_seconds")
+    .select("id, actor_type, actor_id, company_id, token_hash, prev_token_hash, rotated_at, created_at, revoked_at, idle_expires_at, absolute_expires_at, last_used_at, idle_ttl_seconds")
     .eq("id", parsed.sessionId)
     .maybeSingle();
   if (!row) return null;
-  if (!secretMatches(parsed.secret, row.token_hash)) return null;
 
-  const evalResult = evaluateSession(row as SessionRow, Date.now());
-  if (evalResult.state !== "valid") return null;
+  const now = Date.now();
+  const cls = classifyPresentedSecret(row as RotationRow, parsed.secret, now);
 
-  if (evalResult.slide) {
-    const nowIso = new Date().toISOString();
-    await supabase
-      .from(TABLE)
-      .update({ last_used_at: nowIso, idle_expires_at: evalResult.nextIdleExpiresAt })
-      .eq("id", parsed.sessionId)
-      .is("revoked_at", null);
+  if (cls === "none") return null;
+  if (cls === "prev_stale") {
+    // 猶予を過ぎた旧トークンの再利用＝盗用の疑い。セッションを失効させて締め出す。
+    console.error(`[security] stale session secret reused; revoking session ${parsed.sessionId} (possible token theft)`);
+    await supabase.from(TABLE).update({ revoked_at: new Date().toISOString() }).eq("id", parsed.sessionId).is("revoked_at", null);
+    return null;
   }
 
-  return {
+  const evalResult = evaluateSession(row as SessionRow, now);
+  if (evalResult.state !== "valid") return null;
+
+  const base: ResolvedSession = {
     sessionId: row.id as string,
     actorType: row.actor_type as SessionActorType,
     actorId: row.actor_id as string,
     companyId: (row.company_id as string | null) ?? null,
   };
+
+  // ローテーションは「現在のトークンでの利用」かつ間隔経過時のみ。
+  if (cls === "current" && shouldRotate(row as RotationRow, now)) {
+    const next = generateSession(); // 新しい sessionId は使わず secret のみ流用
+    const nowIso = new Date(now).toISOString();
+    // CAS: 読み取った token_hash がまだ現在値のときだけ回す（並行ローテーションのレース防止）。
+    const { data: rotated } = await supabase
+      .from(TABLE)
+      .update({
+        token_hash: hashSecret(next.secret),
+        prev_token_hash: row.token_hash,
+        rotated_at: nowIso,
+        last_used_at: nowIso,
+        idle_expires_at: evalResult.nextIdleExpiresAt,
+      })
+      .eq("id", parsed.sessionId)
+      .eq("token_hash", row.token_hash as string)
+      .is("revoked_at", null)
+      .select("id");
+    if (Array.isArray(rotated) && rotated.length > 0) {
+      return {
+        ...base,
+        rotatedCookie: {
+          value: `${parsed.sessionId}.${next.secret}`,
+          maxAge: remainingMaxAge(row.absolute_expires_at as string, now),
+        },
+      };
+    }
+    // CAS負け（他リクエストが先にローテーション済み）→ 通常処理へフォールバック。
+  }
+
+  // 通常のスライド更新（間引きあり）。prev_grace のときはCookie再設定しない。
+  if (evalResult.slide) {
+    await supabase
+      .from(TABLE)
+      .update({ last_used_at: new Date().toISOString(), idle_expires_at: evalResult.nextIdleExpiresAt })
+      .eq("id", parsed.sessionId)
+      .is("revoked_at", null);
+  }
+
+  return base;
 }
 
 export async function revokeServerSession(sessionId: string): Promise<void> {
@@ -251,4 +340,28 @@ export async function revokeSessionForActor(
     .is("revoked_at", null)
     .select("id");
   return Array.isArray(data) && data.length > 0;
+}
+
+// 期限切れ・失効済みの行を物理削除する（定期スイープ）。削除件数を返す。
+// - 絶対期限切れは即対象
+// - 失効済みは監査のため一定期間残してから削除
+export async function sweepExpiredSessions(nowMs: number = Date.now()): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  const nowIso = new Date(nowMs).toISOString();
+  const revokedCutoff = new Date(nowMs - REVOKED_RETENTION_SEC * 1000).toISOString();
+
+  const { data: expired } = await supabase
+    .from(TABLE)
+    .delete()
+    .lt("absolute_expires_at", nowIso)
+    .select("id");
+
+  const { data: oldRevoked } = await supabase
+    .from(TABLE)
+    .delete()
+    .not("revoked_at", "is", null)
+    .lt("revoked_at", revokedCutoff)
+    .select("id");
+
+  return (expired?.length ?? 0) + (oldRevoked?.length ?? 0);
 }
