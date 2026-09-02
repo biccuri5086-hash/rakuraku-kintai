@@ -101,8 +101,20 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
 
   const deleteCompany = async () => {
     if (!confirm(`「${company?.name}」を完全に削除します。\n所属スタッフの全データも削除されます。\n本当によろしいですか？`)) return;
-    const res = await fetch(`/api/superadmin/companies/${id}`, { method: "DELETE" });
-    if (res.ok) router.replace("/superadmin");
+    // 不可逆な操作のため、サーバ側で会社名の一致を必須にしている。誤操作・盗用セッションの一撃を防ぐ。
+    const typed = prompt(`確認のため、削除する会社名「${company?.name}」を正確に入力してください`);
+    if (typed === null) return;
+    const res = await fetch(`/api/superadmin/companies/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: typed }),
+    });
+    if (res.ok) {
+      router.replace("/superadmin");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.message ?? "削除に失敗しました");
+    }
   };
 
   const removeAdmin = async (adminId: string, name: string) => {

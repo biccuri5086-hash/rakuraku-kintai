@@ -2,14 +2,13 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { requireLineUser, LineUser } from "./line-auth";
+import { requireSessionSecret } from "./security-guard";
 
 const COOKIE_NAME = "me_session";
 const TTL_SECONDS = 30 * 60;
 
 function getSecret(): string {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 16) throw new Error("SESSION_SECRET must be configured (>= 16 chars)");
-  return secret;
+  return requireSessionSecret(process.env.SESSION_SECRET);
 }
 
 function sign(payload: string): string {

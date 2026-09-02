@@ -3,6 +3,7 @@ import { requireSuperContext } from "@/lib/tenant-context";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { logAudit } from "@/lib/audit-log";
 import { errorResponse } from "@/lib/api-handler";
+import { confirmationMatches } from "@/lib/security-guard";
 
 const VALID_PLANS = ["standard", "pro", "enterprise"] as const;
 const VALID_STATUSES = ["active", "trial", "suspended", "cancelled"] as const;
@@ -96,9 +97,21 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const { id } = await ctx.params;
     if (!isUuid(id)) return NextResponse.json({ ok: false, message: "不正なID" }, { status: 400 });
 
+    let body: { confirm?: unknown } = {};
+    try { body = await req.json(); } catch { /* 本文なしは確認未入力として扱う */ }
+
     const supabase = getSupabaseAdmin();
     const { data: company } = await supabase.from("companies").select("name").eq("id", id).maybeSingle();
     if (!company) return NextResponse.json({ ok: false, message: "見つかりません" }, { status: 404 });
+
+    // 不可逆な全社削除。セッションだけに依存せず、対象の会社名の再入力を必須にする
+    // （盗まれた/偽造されたセッションによる無差別削除・CSRF的な一撃を防ぐ二重確認）。
+    if (!confirmationMatches(company.name, body.confirm)) {
+      return NextResponse.json(
+        { ok: false, message: "確認のため会社名を正確に入力してください", code: "CONFIRM_REQUIRED" },
+        { status: 400 }
+      );
+    }
 
     await logAudit(req, "super_company_delete", { name: company.name }, {
       actorType: "super_admin", actorId: guard.ctx.superAdminId, companyId: id,
