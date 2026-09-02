@@ -20,16 +20,21 @@ async function verifyAccessToken(accessToken: string): Promise<LineUser | null> 
     if (!profileRes.ok) return null;
     const profile = (await profileRes.json()) as { userId: string; displayName: string };
 
+    // トークン混同攻撃(別のLINEアプリで取得した任意トークンでの通過)を防ぐため、
+    // access_token が本アプリのチャネルに発行されたものか必ず検証する。
+    // LINE_CHANNEL_ID 未設定なら検証不能＝フェイルクローズ（認証拒否）する。
     const expectedChannelId = process.env.LINE_CHANNEL_ID;
-    if (expectedChannelId) {
-      const verifyRes = await fetch(
-        `https://api.line.me/oauth2/v2.1/verify?access_token=${encodeURIComponent(accessToken)}`,
-        { cache: "no-store" }
-      );
-      if (!verifyRes.ok) return null;
-      const verifyData = (await verifyRes.json()) as { client_id?: string };
-      if (verifyData.client_id !== expectedChannelId) return null;
+    if (!expectedChannelId) {
+      console.error("[security] LINE_CHANNEL_ID is not configured; rejecting LINE auth (fail-closed)");
+      return null;
     }
+    const verifyRes = await fetch(
+      `https://api.line.me/oauth2/v2.1/verify?access_token=${encodeURIComponent(accessToken)}`,
+      { cache: "no-store" }
+    );
+    if (!verifyRes.ok) return null;
+    const verifyData = (await verifyRes.json()) as { client_id?: string };
+    if (verifyData.client_id !== expectedChannelId) return null;
 
     const user: LineUser = { userId: profile.userId, displayName: profile.displayName };
     cache.set(accessToken, { user, expiresAt: Date.now() + CACHE_TTL_MS });

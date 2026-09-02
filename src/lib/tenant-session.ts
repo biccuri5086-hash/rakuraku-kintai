@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { requireSessionSecret } from "./security-guard";
 
 export const TENANT_SESSION_COOKIE = "rk_tenant_session";
 export const SUPER_SESSION_COOKIE = "rk_super_session";
@@ -20,11 +21,7 @@ export type SuperSessionPayload = {
 };
 
 function getSecret(): string {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 16) {
-    throw new Error("SESSION_SECRET must be configured (>= 16 chars)");
-  }
-  return secret;
+  return requireSessionSecret(process.env.SESSION_SECRET);
 }
 
 function b64url(input: Buffer | string): string {
