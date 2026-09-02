@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Users, Clock, AlertCircle, LogOut, Shield, Building2, FileText, CalendarClock, LockKeyhole, ShieldCheck } from "lucide-react";
+import { RefreshCw, Users, Clock, AlertCircle, LogOut, Shield, Building2, FileText, CalendarClock, LockKeyhole, ShieldCheck, Monitor } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 type TodayShift = { id: string; start_time: string | null; end_time: string | null; staff_name: string; client_name: string };
@@ -160,6 +160,13 @@ export default function AdminPage() {
             className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
           >
             <ShieldCheck size={18} />
+          </button>
+          <button
+            onClick={() => router.push("/admin/sessions")}
+            title="ログイン中の端末"
+            className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+          >
+            <Monitor size={18} />
           </button>
           <button
             onClick={fetchData}

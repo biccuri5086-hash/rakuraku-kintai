@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, LogOut, Plus, Users, RefreshCw, Settings, Copy, Check, LockKeyhole, Shield } from "lucide-react";
+import { Building2, LogOut, Plus, Users, RefreshCw, Settings, Copy, Check, LockKeyhole, Shield, Monitor } from "lucide-react";
 
 type Company = {
   id: string;
@@ -93,6 +93,9 @@ export default function SuperAdminPage() {
           </button>
           <button onClick={() => router.push("/superadmin/password")} className="p-2 rounded-full bg-white/10 hover:bg-white/20" title="パスワード変更">
             <LockKeyhole size={18} />
+          </button>
+          <button onClick={() => router.push("/superadmin/sessions")} className="p-2 rounded-full bg-white/10 hover:bg-white/20" title="ログイン中の端末">
+            <Monitor size={18} />
           </button>
           <button onClick={fetchData} className="p-2 rounded-full bg-white/10 hover:bg-white/20" title="更新">
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} />

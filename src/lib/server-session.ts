@@ -197,3 +197,58 @@ export async function revokeOtherSessions(
   if (keepSessionId) q = q.neq("id", keepSessionId);
   await q;
 }
+
+export type SessionSummary = {
+  id: string;
+  createdAt: string;
+  lastUsedAt: string;
+  idleExpiresAt: string;
+  absoluteExpiresAt: string;
+  userAgent: string | null;
+  ip: string | null;
+};
+
+// 本人の「今有効な」セッション一覧（失効・期限切れは除外）。最近使った順。
+export async function listSessionsForActor(
+  actorType: SessionActorType,
+  actorId: string
+): Promise<SessionSummary[]> {
+  const nowIso = new Date().toISOString();
+  const { data } = await getSupabaseAdmin()
+    .from(TABLE)
+    .select("id, created_at, last_used_at, idle_expires_at, absolute_expires_at, user_agent, ip")
+    .eq("actor_type", actorType)
+    .eq("actor_id", actorId)
+    .is("revoked_at", null)
+    .gt("absolute_expires_at", nowIso)
+    .gt("idle_expires_at", nowIso)
+    .order("last_used_at", { ascending: false })
+    .limit(100);
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    createdAt: r.created_at as string,
+    lastUsedAt: r.last_used_at as string,
+    idleExpiresAt: r.idle_expires_at as string,
+    absoluteExpiresAt: r.absolute_expires_at as string,
+    userAgent: (r.user_agent as string | null) ?? null,
+    ip: (r.ip as string | null) ?? null,
+  }));
+}
+
+// 本人のセッションだけを失効できる（他人のIDを指定しても対象外＝IDOR防止）。
+// 実際に失効させたら true。
+export async function revokeSessionForActor(
+  sessionId: string,
+  actorType: SessionActorType,
+  actorId: string
+): Promise<boolean> {
+  const { data } = await getSupabaseAdmin()
+    .from(TABLE)
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .eq("actor_type", actorType)
+    .eq("actor_id", actorId)
+    .is("revoked_at", null)
+    .select("id");
+  return Array.isArray(data) && data.length > 0;
+}
