@@ -34,6 +34,13 @@ const CONDITION_LABELS: Record<number, { emoji: string; label: string; bg: strin
   1: { emoji: "😢", label: "しんどい", bg: "bg-red-100", text: "text-red-700" },
 };
 
+// 初回ログイン時（データ0件）に出す、最初にやることの導線。
+const SETUP_STEPS = [
+  { n: 1, icon: Building2, title: "派遣先を登録", desc: "スタッフを派遣する先の企業を登録します", href: "/admin/clients" },
+  { n: 2, icon: FileText, title: "契約を作成", desc: "派遣先ごとの期間・単価などの契約を登録します", href: "/admin/assignments" },
+  { n: 3, icon: CalendarClock, title: "シフトを組む", desc: "勤務予定を登録すると、スタッフがLINEで打刻できます", href: "/admin/shifts" },
+];
+
 function formatTime(iso: string | null) {
   if (!iso) return "--:--";
   return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
@@ -118,7 +125,11 @@ export default function AdminPage() {
   }, [authed, fetchData]);
 
   const presentCount = users.filter((u) => u.clockIn).length;
-  const alertCount = users.filter((u) => u.condition && u.condition.score <= 2).length;
+  // 体調スコアが低い（しんどい/疲れ）スタッフ＝早めに声をかけたい人。離職防止の要。
+  const followUps = users.filter((u) => u.condition && u.condition.score <= 2);
+  const alertCount = followUps.length;
+  // 派遣先も契約も0件＝まだ何もセットアップしていない新規アカウント。
+  const isFirstRun = overview !== null && overview.clientsCount === 0 && overview.activeAssignments === 0;
 
   if (!authed) {
     return (
@@ -195,6 +206,59 @@ export default function AdminPage() {
             </span>
           )}
         </div>
+
+        {followUps.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl shadow-sm p-4">
+            <h2 className="font-bold text-red-700 text-sm flex items-center gap-1.5">
+              <AlertCircle size={16} /> 気にかけたいスタッフ {followUps.length}名
+            </h2>
+            <p className="text-xs text-red-400 mt-0.5">体調がすぐれない報告がありました。早めに声をかけましょう。</p>
+            <div className="mt-3 space-y-2">
+              {followUps.map((u) => {
+                const cond = u.condition ? CONDITION_LABELS[u.condition.score] : null;
+                return (
+                  <div key={u.user_id} className="flex items-start gap-2 text-sm">
+                    {cond && (
+                      <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${cond.bg} ${cond.text}`}>
+                        {cond.emoji} {cond.label}
+                      </span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="font-semibold text-gray-800">{u.full_name ?? u.user_name}</span>
+                      {u.condition?.comment && <span className="text-gray-500"> ／ 💬 {u.condition.comment}</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {isFirstRun && (
+          <div className="bg-white rounded-2xl shadow p-5 border border-[#06C755]/30">
+            <h2 className="font-bold text-gray-800 flex items-center gap-2">
+              <span aria-hidden>👋</span> ようこそ！まず3ステップで始めましょう
+            </h2>
+            <p className="text-xs text-gray-400 mt-1">この3つを登録すると、スタッフがLINEで打刻できるようになります。</p>
+            <div className="mt-4 space-y-2">
+              {SETUP_STEPS.map(({ n, icon: Icon, title, desc, href }) => (
+                <button
+                  key={n}
+                  onClick={() => router.push(href)}
+                  className="w-full flex items-center gap-3 text-left rounded-xl border border-gray-100 hover:border-[#06C755] hover:bg-green-50/40 transition-colors px-3 py-3"
+                >
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-[#06C755] text-white text-sm font-bold flex items-center justify-center">{n}</span>
+                  <Icon size={20} className="flex-shrink-0 text-[#06C755]" />
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-gray-800 text-sm">{title}</span>
+                    <span className="block text-xs text-gray-400">{desc}</span>
+                  </span>
+                  <span aria-hidden className="ml-auto flex-shrink-0 text-gray-300">›</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-2xl shadow p-4 text-center">
