@@ -125,7 +125,9 @@ export default function AdminPage() {
   }, [authed, fetchData]);
 
   const presentCount = users.filter((u) => u.clockIn).length;
-  const alertCount = users.filter((u) => u.condition && u.condition.score <= 2).length;
+  // 体調スコアが低い（しんどい/疲れ）スタッフ＝早めに声をかけたい人。離職防止の要。
+  const followUps = users.filter((u) => u.condition && u.condition.score <= 2);
+  const alertCount = followUps.length;
   // 派遣先も契約も0件＝まだ何もセットアップしていない新規アカウント。
   const isFirstRun = overview !== null && overview.clientsCount === 0 && overview.activeAssignments === 0;
 
@@ -204,6 +206,33 @@ export default function AdminPage() {
             </span>
           )}
         </div>
+
+        {followUps.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl shadow-sm p-4">
+            <h2 className="font-bold text-red-700 text-sm flex items-center gap-1.5">
+              <AlertCircle size={16} /> 気にかけたいスタッフ {followUps.length}名
+            </h2>
+            <p className="text-xs text-red-400 mt-0.5">体調がすぐれない報告がありました。早めに声をかけましょう。</p>
+            <div className="mt-3 space-y-2">
+              {followUps.map((u) => {
+                const cond = u.condition ? CONDITION_LABELS[u.condition.score] : null;
+                return (
+                  <div key={u.user_id} className="flex items-start gap-2 text-sm">
+                    {cond && (
+                      <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${cond.bg} ${cond.text}`}>
+                        {cond.emoji} {cond.label}
+                      </span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="font-semibold text-gray-800">{u.full_name ?? u.user_name}</span>
+                      {u.condition?.comment && <span className="text-gray-500"> ／ 💬 {u.condition.comment}</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {isFirstRun && (
           <div className="bg-white rounded-2xl shadow p-5 border border-[#06C755]/30">
