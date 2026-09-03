@@ -1,0 +1,54 @@
+name: Health Check
+
+# 本番の死活監視（外部サービス不要・設定はこのリポジトリに残る）。
+# /api/health を定期的に叩き、正常でなければジョブを失敗させる。
+# GitHub はワークフロー失敗時に自動でメール通知するため、これだけで
+# 「本番が落ちた／DBに繋がらない」に気づける（UptimeRobot 等の代わり）。
+#
+# 実行タイミング:
+#  1) 10分ごと（自動）
+#  2) 手動（Actions タブ → Health Check → Run workflow）
+#
+# 監視先URLを変えたいとき:
+#  Settings → Secrets and variables → Actions → Variables に
+#  HEALTHCHECK_URL を作ると、その値で監視する（未設定なら本番URL）。
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+# 前の実行がまだ動いていても、新しい方を優先（監視の遅延を防ぐ）
+concurrency:
+  group: health-check
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: /api/health を確認（3回まで再試行）
+        env:
+          URL: ${{ vars.HEALTHCHECK_URL || 'https://rakuraku-kintai.vercel.app/api/health' }}
+        run: |
+          echo "監視先: $URL"
+          for attempt in 1 2 3; do
+            # -sS: 進捗は出さずエラーは出す / 本文と末尾にHTTPコードを取得
+            body="$(curl -sS --max-time 20 -w $'\n%{http_code}' "$URL" || true)"
+            code="$(printf '%s' "$body" | tail -n1)"
+            payload="$(printf '%s' "$body" | sed '$d')"
+            echo "試行 $attempt: HTTP $code / 応答: $payload"
+
+            if [ "$code" = "200" ] && printf '%s' "$payload" | grep -q '"db":"up"'; then
+              echo "::notice::本番は正常です（HTTP 200・db=up）"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "正常応答ではないため15秒後に再試行します…"
+              sleep 15
+            fi
+          done
+
+          echo "::error::死活監視に失敗しました。本番が落ちているか、DBに到達できません（HTTP $code）。$URL を確認してください。"
+          exit 1
