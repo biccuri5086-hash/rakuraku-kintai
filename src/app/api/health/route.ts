@@ -24,31 +24,6 @@ export async function GET() {
     console.error("[health] db check threw:", e);
   }
 
-  // supabase-js 側でエラー詳細が空になる事象の切り分け用：生のHTTPリクエストで
-  // 実際のステータスコード・レスポンス本文を直接見る（ローカル検証時のみ）。
-  let rawFetchDebug: string | null = null;
-  if (!process.env.VERCEL_ENV && db === "down") {
-    try {
-      const rawUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
-      const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
-      const schemaHeader = process.env.SUPABASE_SCHEMA ?? "public";
-      const res = await fetch(`${rawUrl}/rest/v1/companies?select=id&limit=1`, {
-        headers: {
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-          "Accept-Profile": schemaHeader,
-        },
-        cache: "no-store",
-      });
-      const text = await res.text();
-      rawFetchDebug = `status=${res.status} body=${text.slice(0, 300)}`;
-      console.error("[health] raw fetch debug:", rawFetchDebug);
-    } catch (e) {
-      rawFetchDebug = `raw fetch threw: ${e instanceof Error ? e.message : String(e)}`;
-      console.error("[health]", rawFetchDebug);
-    }
-  }
-
   // 接続先の識別（秘密ではない：Supabaseプロジェクト参照＝公開URLの一部）。
   // Preview が staging を向いているかの切り分け用。
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -63,7 +38,7 @@ export async function GET() {
     latencyMs: Date.now() - startedAt,
     time: new Date().toISOString(),
     // 本番(Vercel)ではエラー詳細を外部に出さない。ローカル検証時だけ切り分けのために含める。
-    ...(process.env.VERCEL_ENV ? {} : { debugError, rawFetchDebug }),
+    ...(process.env.VERCEL_ENV ? {} : { debugError }),
   };
   return NextResponse.json(body, {
     status: db === "up" ? 200 : 503,
