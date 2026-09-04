@@ -1165,6 +1165,10 @@ create table if not exists compliance_settings (
 alter table compliance_settings enable row level security;
 
 -- 追跡テーブルにも RLS（ポリシーは作らない＝service_role のみ）
+-- ※ 本来この表は末尾の「schema_migrations 記録」節で作られるが、このファイルを
+--    真っさらなスキーマ（例: staging）に上から通しで流した場合、この時点ではまだ
+--    存在せず ALTER が 42P01 で落ちる。ここでも if not exists で先に作っておく。
+create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now());
 alter table schema_migrations enable row level security;
 
 
