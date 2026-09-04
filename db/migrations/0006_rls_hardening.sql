@@ -22,14 +22,17 @@ drop policy if exists "dev_allow_all_audit"      on admin_audit_log;
 alter table schema_migrations enable row level security;
 
 -- 3) 全テーブルで RLS を有効化（既に有効なら no-op）
+--    schemaname は current_schema() で判定する（'public' 固定にしない）。
+--    ステージング検証用に search_path を staging 等へ切り替えて適用する運用に対応するため。
+--    本番（search_path未変更）では current_schema() が 'public' になるので挙動は従来どおり。
 do $$
 declare t record;
 begin
   for t in
     select tablename from pg_tables
-    where schemaname = 'public' and rowsecurity = false
+    where schemaname = current_schema() and rowsecurity = false
   loop
-    execute format('alter table public.%I enable row level security', t.tablename);
+    execute format('alter table %I.%I enable row level security', current_schema(), t.tablename);
     raise notice 'RLS を有効化: %', t.tablename;
   end loop;
 end $$;

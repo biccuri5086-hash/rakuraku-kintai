@@ -5,8 +5,12 @@
 // 使い方:
 //   DATABASE_URL="postgresql://..." npm run migrate            # 未適用を全部適用
 //   DATABASE_URL="postgresql://..." npm run migrate -- --dry   # 何が適用されるか表示のみ
+//   PG_SCHEMA="staging" DATABASE_URL="..." npm run migrate     # public以外のスキーマに適用（検証環境用）
 //
 // 接続文字列は環境変数 DATABASE_URL からのみ読む（ファイルには絶対に保存しない）。
+// PG_SCHEMA を指定すると、そのスキーマを作成した上で search_path を切り替えて適用する。
+// schema_migrations の適用済み管理もスキーマごとに独立する（publicとstagingで別々に追跡される）。
+// 【本番では PG_SCHEMA を絶対に設定しないこと】（既定は public＝従来どおり）
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -19,6 +23,12 @@ const dryRun = process.argv.includes("--dry");
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.error("✗ DATABASE_URL が未設定です。接続文字列を環境変数で渡してください。");
+  process.exit(1);
+}
+
+const schema = (process.env.PG_SCHEMA ?? "public").trim() || "public";
+if (!/^[a-z_][a-z0-9_]*$/.test(schema)) {
+  console.error(`✗ PG_SCHEMA の形式が不正です: "${schema}"`);
   process.exit(1);
 }
 
@@ -36,6 +46,14 @@ const client = new pg.Client({
 try {
   await client.connect();
   console.log("接続OK");
+
+  if (schema !== "public") {
+    await client.query(`create schema if not exists "${schema}"`);
+    console.log(`スキーマ "${schema}" に適用します（public とは独立）`);
+  }
+  // search_path の先頭を対象スキーマにする。pgcrypto 等の拡張関数は通常 extensions
+  // スキーマにあり、デフォルトの search_path に含まれているため public を残しておいても問題ない。
+  await client.query(`set search_path to "${schema}", public`);
 
   await client.query(`
     create table if not exists schema_migrations (

@@ -27,6 +27,7 @@ export async function GET() {
     db,
     env: process.env.VERCEL_ENV ?? "local", // production / preview / local
     project, // 接続先Supabaseプロジェクトの参照
+    schema: process.env.SUPABASE_SCHEMA ?? "public", // ステージング検証用スキーマを見ているかの切り分け用
     latencyMs: Date.now() - startedAt,
     time: new Date().toISOString(),
   };
