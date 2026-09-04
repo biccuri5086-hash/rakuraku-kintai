@@ -64,6 +64,18 @@
 | DB Migrate が exit 1 | Direct(IPv6) 接続文字列 | Secret `DATABASE_URL` を Session pooler(IPv4) に差し替え |
 | 集計値がおかしい | ロジック/データ不整合 | `npm run dogfood` と `npm test` で切り分け。打刻漏れは要確認で除外される仕様 |
 
+## 5.5 スタッフの無効化・打刻停止
+
+- `PATCH /api/admin/staff` に `{ user_id, status: "inactive" }` を送るとスタッフを無効化できる（UIは未整備・現状はAPI直叩きかSQL Editor）。
+- **無効化してから打刻APIで実際に拒否されるまで、最大5分の遅延がある**。
+  `src/lib/me-session.ts` が `company_id`／在籍状態(user_profiles.status)／
+  会社状態(companies.status)を5分キャッシュしているため（打刻APIのDB往復を
+  減らすためのキャッシュで、即時反映と引き換えにしている）。緊急停止したい場合は
+  5分待つか、Supabase側で該当スタッフの `user_profiles.status` を直接
+  `inactive` にした上で数分待つ。
+- 会社の利用停止（`companies.status = 'suspended'/'cancelled'`）も同じ経路で
+  打刻を止められる（同じ5分遅延）。
+
 ## 6. 秘密情報のローテーション
 - **DBパスワード**: Supabase → Database → Reset database password → GitHub Secret `DATABASE_URL` を更新（アプリは service_role 接続なので本番影響なし）。
 - **service_role / anon key**: Supabase で再発行 → Vercel 環境変数を更新 → Redeploy。

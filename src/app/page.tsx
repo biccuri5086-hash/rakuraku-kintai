@@ -113,24 +113,42 @@ export default function HomePage() {
     setTapped((v) => !v); // 打刻後に当日データを再取得
     if (type === "clock_in") {
       // 出勤：GPSで就業場所を記録。コンディションは聞かない（退勤時に聞く）。
+      //
+      // GPS取得は最大10秒かかるため打刻そのものは待たせないが、「完了画面を見てすぐ
+      // ブラウザを閉じる」と位置情報の送信前に離脱してしまうリスクがある。
+      // そこで (1) GPS送信リクエストには keepalive を付け、ページが閉じられても
+      // ブラウザ側でリクエストの送出自体は継続させ、かつ (2) 完了画面への遷移を
+      // 「GPS取得の完了 or 最大8秒のタイムアウト」まで待つことで、通常の操作速度では
+      // 位置情報が送信し終わってから画面が切り替わるようにする。
       if (features.feature_gps && navigator.geolocation) {
         setGpsStatus("acquiring");
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const gps = {
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              accuracy: pos.coords.accuracy,
-            };
-            setGpsStatus("done");
-            authedFetch("/api/me/gps", {
-              method: "POST",
-              body: JSON.stringify({ attendanceId: data.attendanceId, ...gps }),
-            });
-          },
-          () => setGpsStatus("done"),
-          { timeout: 10000, maximumAge: 0 }
-        );
+        const gpsDone = new Promise<void>((resolve) => {
+          const finish = () => resolve();
+          const timer = setTimeout(finish, 8000);
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              clearTimeout(timer);
+              const gps = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+              };
+              setGpsStatus("done");
+              authedFetch("/api/me/gps", {
+                method: "POST",
+                body: JSON.stringify({ attendanceId: data.attendanceId, ...gps }),
+                keepalive: true,
+              }).finally(finish);
+            },
+            () => {
+              clearTimeout(timer);
+              setGpsStatus("done");
+              finish();
+            },
+            { timeout: 8000, maximumAge: 0 }
+          );
+        });
+        await gpsDone;
       }
       setDoneType("in");
       setClockInDone(true);

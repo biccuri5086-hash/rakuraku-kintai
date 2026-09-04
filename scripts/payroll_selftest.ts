@@ -92,6 +92,42 @@ const one = (ps: PunchEvent[]) => aggregatePayroll({ punches: ps, settings: S, h
   eq("ot60 estPay", r.estimatedPay, 265000);
 }
 
+// --- 月60時間の境界値：59:59 / 60:00 / 60:01 で割増の切り替わりが正しいか ---
+// (Geminiレビュー指摘の境界値テスト。gross=OT+540分固定(休憩60分)で残業分をピンポイントに作る)
+{
+  const dayWithOvertime = (date: string, otMin: number): PunchEvent[] => {
+    const grossMin = otMin + 540; // 実働8h(480)+休憩60分+残業otMin
+    const start = new Date(`${date}T09:00:00+09:00`);
+    const end = new Date(start.getTime() + grossMin * 60000);
+    return [P("u", "clock_in", start.toISOString()), P("u", "clock_out", end.toISOString())];
+  };
+  // 9週×360分 + 最終週の残り分 で目的の月合計残業(分)を作る（週40h按分を避けるため週1日ずつ配置）
+  const buildPunches = (totalOtMin: number): PunchEvent[] => {
+    const base = new Date(Date.UTC(2024, 0, 1));
+    const perWeek = 360;
+    const weeks = 9;
+    const ps: PunchEvent[] = [];
+    for (let i = 0; i < weeks; i++) {
+      const d = new Date(base.getTime() + i * 7 * 86400000).toISOString().slice(0, 10);
+      ps.push(...dayWithOvertime(d, perWeek));
+    }
+    const lastDay = new Date(base.getTime() + weeks * 7 * 86400000).toISOString().slice(0, 10);
+    ps.push(...dayWithOvertime(lastDay, totalOtMin - perWeek * weeks));
+    return ps;
+  };
+
+  const r3599 = one(buildPunches(3599));
+  eq("59:59 (3599min) -> overtime60Min=0", r3599.overtime60Min, 0);
+  eq("59:59 (3599min) overtimeMin total", r3599.overtimeMin, 3599);
+
+  const r3600 = one(buildPunches(3600));
+  eq("60:00 (3600min ちょうど) -> overtime60Min=0", r3600.overtime60Min, 0);
+
+  const r3601 = one(buildPunches(3601));
+  eq("60:01 (3601min) -> overtime60Min=1", r3601.overtime60Min, 1);
+  eq("60:01 (3601min) overtimeBase = overtimeMin-1", r3601.overtimeMin - r3601.overtime60Min, 3600);
+}
+
 // --- 掛け持ち（同月に複数派遣先）でも正しい時給が使われることの検証 ---
 // これが今回のバグ修正の本題：user_id ごとに1つの時給ではなく、日ごとに契約(派遣先)を
 // 解決して、その契約の時給で支払額を計算する。

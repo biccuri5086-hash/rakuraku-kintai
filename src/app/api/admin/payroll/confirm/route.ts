@@ -7,6 +7,7 @@ import { aggregatePayroll } from "@/lib/payroll/aggregate";
 import { loadFullSettings } from "@/lib/payroll/companySettings";
 import { rowToAssignment, rowToPayRule, resolveDayRate } from "@/lib/payroll/payRules";
 import type { PunchEvent } from "@/lib/payroll/types";
+import { logAudit } from "@/lib/audit-log";
 
 // 月次の締め（確定）。timesheets / timesheet_entries に保存する。
 // これらのテーブルは PHASE_B_MIGRATION.sql 適用後に存在するため、未適用時は 409（未適用）を返す。
@@ -105,9 +106,19 @@ export async function POST(req: NextRequest) {
 
     const rows = aggregatePayroll({ punches: (punches ?? []) as PunchEvent[], settings, shiftBreakByKey, dayRate });
 
+    // 既に確定済みの月をもう一度確定すると無言で上書きされ、何がどう変わったか分からなくなる。
+    // 確定済み分だけ、上書き前の値を控えておいて差分を監査ログに残す。
+    const { data: existingTimesheets } = await supabase
+      .from("timesheets")
+      .select("user_id, work_min, overtime_min, night_min, holiday_min, estimated_pay, status")
+      .eq("company_id", ctx.companyId)
+      .eq("period_ym", month);
+    const existingByUser = new Map((existingTimesheets ?? []).map((t) => [t.user_id as string, t]));
+
     const now = new Date().toISOString();
     let saved = 0;
     for (const r of rows) {
+      const prev = existingByUser.get(r.user_id);
       const { data: ts, error: tErr } = await supabase
         .from("timesheets")
         .upsert(
@@ -159,6 +170,24 @@ export async function POST(req: NextRequest) {
         if (eErr) return NextResponse.json({ ok: false, message: MIGRATION_MSG, detail: eErr.message }, { status: 409 });
       }
       saved += 1;
+
+      if (prev && prev.status === "confirmed") {
+        const fields: Array<[string, unknown, unknown]> = [
+          ["work_min", prev.work_min, r.workMin],
+          ["overtime_min", prev.overtime_min, r.overtimeMin],
+          ["night_min", prev.night_min, r.nightMin],
+          ["holiday_min", prev.holiday_min, r.holidayMin],
+          ["estimated_pay", prev.estimated_pay, r.estimatedPay],
+        ];
+        const diff = Object.fromEntries(
+          fields.filter(([, before, after]) => before !== after).map(([k, before, after]) => [k, { before, after }])
+        );
+        if (Object.keys(diff).length > 0) {
+          await logAudit(req, "admin_payroll_reconfirm", { user_id: r.user_id, month, diff }, {
+            actorType: "admin", actorId: ctx.adminId, companyId: ctx.companyId,
+          });
+        }
+      }
     }
 
     return NextResponse.json({ ok: true, month, confirmed: saved, confirmedAt: now });

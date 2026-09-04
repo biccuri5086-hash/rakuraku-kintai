@@ -34,7 +34,9 @@ export type AuditAction =
   | "tenant_violation_attempt"
   | "staff_register"
   | "staff_clock"
-  | "staff_condition";
+  | "staff_condition"
+  | "admin_staff_status_change"
+  | "admin_payroll_reconfirm";
 
 export type ActorType = "super_admin" | "admin" | "staff" | "system";
 

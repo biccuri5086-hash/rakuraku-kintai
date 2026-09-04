@@ -16,7 +16,13 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getLineSessionCached(req);
     if (!session) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
-    const { user, companyId } = session;
+    const { user, companyId, blocked } = session;
+    if (blocked === "staff_inactive") {
+      return NextResponse.json({ ok: false, message: "アカウントが無効化されています。管理者にお問い合わせください。" }, { status: 403 });
+    }
+    if (blocked === "company_suspended") {
+      return NextResponse.json({ ok: false, message: "この会社のサービスは現在ご利用いただけません。" }, { status: 403 });
+    }
 
     let type: PunchType;
     let idempotencyKey: string;
