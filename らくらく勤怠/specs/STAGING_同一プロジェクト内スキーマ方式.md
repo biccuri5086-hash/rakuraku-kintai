@@ -50,10 +50,36 @@ Postgresの別スキーマ（`staging`）にテーブル一式を複製する。
 
 Supabaseの自動生成API（PostgREST、＝`@supabase/supabase-js`が使う経路）は、デフォルトで
 `public`スキーマしか外部に見せない。`staging`をAPI経由で読み書きするには明示的な許可が要る。
+**ダッシュボードでのバージョンによっては「Settings → API」ではなく「Settings → Data API」**
+という独立ページに移動している。
 
-1. Supabaseダッシュボード → **Settings** → **API**
+1. Supabaseダッシュボード → **Settings** → **Data API**（または **API**）
 2. **Exposed schemas** に `staging` を追加（`public`と併記でよい。既存の本番動作に影響しない）
 3. 保存
+
+### STEP 2.5: `service_role` に `staging` スキーマの権限を付与する（★必須・忘れやすい）
+
+Exposed schemasに追加しただけでは、PostgRESTが`staging`へのリクエストを**ルーティング**
+するようにはなるが、**データベース側の権限（GRANT）は自動では付かない**。手動で作った
+スキーマは、Supabaseが管理する`public`と違ってデフォルトで`service_role`に権限が無く、
+`permission denied for schema staging`（Postgresエラー42501）になる。
+
+SQL Editorで以下を実行する：
+
+```sql
+grant usage on schema staging to service_role;
+grant all on all tables in schema staging to service_role;
+grant all on all sequences in schema staging to service_role;
+grant all on all routines in schema staging to service_role;
+
+-- 今後 staging に新しいテーブル/関数を追加したときも自動で権限が付くようにする
+alter default privileges in schema staging grant all on tables to service_role;
+alter default privileges in schema staging grant all on sequences to service_role;
+alter default privileges in schema staging grant all on routines to service_role;
+```
+
+`anon`/`authenticated`ロールには意図的に権限を付与しない（本番と同じく「RLS有効・
+ポリシー0件・service_roleのみ」の方針を検証環境でも貫くため）。
 
 ## STEP 3: ローカル環境変数（`.env.local`）
 
