@@ -36,7 +36,9 @@ export type AuditAction =
   | "staff_clock"
   | "staff_condition"
   | "admin_staff_status_change"
-  | "admin_payroll_reconfirm";
+  | "admin_payroll_reconfirm"
+  | "admin_pay_rule_scheduled"
+  | "admin_pay_rule_cancelled";
 
 export type ActorType = "super_admin" | "admin" | "staff" | "system";
 

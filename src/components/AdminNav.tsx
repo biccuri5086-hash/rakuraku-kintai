@@ -2,14 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Building2, FileText, CalendarClock, Wallet, CalendarHeart, ClipboardList, ShieldAlert, CreditCard } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, CalendarClock, Wallet, CalendarHeart, ClipboardList, ShieldAlert, CreditCard, BadgeJapaneseYen } from "lucide-react";
 
-// group が変わる境目に区切り線を入れ、9項目を意味のある塊に見せる。
+// group が変わる境目に区切り線を入れ、10項目を意味のある塊に見せる。
 const NAV = [
   { href: "/admin", label: "ダッシュボード", icon: LayoutDashboard, group: "main" },
   { href: "/admin/clients", label: "派遣先", icon: Building2, group: "work" },
   { href: "/admin/assignments", label: "契約", icon: FileText, group: "work" },
   { href: "/admin/shifts", label: "シフト", icon: CalendarClock, group: "work" },
+  { href: "/admin/pay-rules", label: "賃率", icon: BadgeJapaneseYen, group: "settle" },
   { href: "/admin/payroll", label: "給与", icon: Wallet, group: "settle" },
   { href: "/admin/paid-leave", label: "有給", icon: CalendarHeart, group: "settle" },
   { href: "/admin/client-report", label: "派遣先報告", icon: ClipboardList, group: "settle" },

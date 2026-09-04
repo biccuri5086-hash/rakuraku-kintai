@@ -76,6 +76,35 @@ export function resolvePayRule(
   return candidates[0];
 }
 
+export interface PayRuleChainLink {
+  scope: PayRuleScope;
+  rule: PayRuleRow | null;
+  isWinner: boolean;
+}
+
+/**
+ * 管理画面の「継承の可視化」用：company/client/assignment それぞれで
+ * 指定日に有効なルールが何か（無ければnull）を返し、実際に勝つスコープを isWinner で示す。
+ * resolvePayRule と優先順位ロジックを共有する（表示と計算で判定がずれないように）。
+ */
+export function resolvePayRuleChain(
+  workDate: string,
+  target: PayRuleTarget,
+  rules: PayRuleRow[]
+): PayRuleChainLink[] {
+  const winner = resolvePayRule(workDate, target, rules);
+  const byScope = (scope: PayRuleScope): PayRuleRow | null => {
+    const candidates = rules.filter((r) => r.scope === scope && matchesScope(r, target) && isActiveOn(r, workDate));
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : a.effectiveFrom > b.effectiveFrom ? -1 : 0));
+    return candidates[0];
+  };
+  return (["company", "client", "assignment"] as PayRuleScope[]).map((scope) => {
+    const rule = byScope(scope);
+    return { scope, rule, isWinner: !!rule && !!winner && rule.id === winner.id };
+  });
+}
+
 // ============================================================
 // 掛け持ち対応：打刻日ごとに「どの契約(派遣先)の勤務だったか」を解決する。
 // ============================================================
