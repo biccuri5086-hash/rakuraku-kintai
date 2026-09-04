@@ -99,7 +99,15 @@ try {
 
   if (!process.exitCode) console.log("\n全マイグレーション完了");
 } catch (e) {
-  console.error("✗ エラー:", e.message);
+  // 接続タイムアウト等は e.message が空になることがある(AggregateError等)。
+  // code・原因の一覧も出して切り分けやすくする。
+  const detail = e?.message || e?.code || String(e);
+  console.error("✗ エラー:", detail);
+  if (e?.code) console.error(`  (code: ${e.code})`);
+  if (Array.isArray(e?.errors) && e.errors.length) {
+    console.error("  内訳:");
+    for (const inner of e.errors) console.error(`    - ${inner?.message || inner?.code || inner}`);
+  }
   process.exitCode = 1;
 } finally {
   await client.end();
