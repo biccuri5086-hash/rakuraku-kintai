@@ -28,12 +28,27 @@
   - Supabase → Database → Backups から手動バックアップ、または
   - `pg_dump`（接続文字列は Connect → Session pooler）でローカルにダンプを取得。
 - **マイグレーション前**は必ずバックアップ（rules.md Rule 1 準拠）。additive設計だが保険。
+- **外部ストレージへの日次自動退避（GitHub Actions「DB Backup」）**: `pg_dump` の論理バックアップを
+  暗号化（age）した上で Cloudflare R2 に日次保存する。Supabase 側の障害・アカウント問題が起きても
+  復元できるようにするための最終防衛線（設計：`らくらく勤怠/specs/ARCH_商用インフラ設計_v1.md` 2章）。
+  - 必要な Secret: `DATABASE_URL`（Session pooler・IPv4）, `AGE_PUBLIC_KEY`, `R2_ENDPOINT`,
+    `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`。いずれか未設定ならワークフローは
+    notice を出してスキップする（失敗にはしない）。
+  - `age` の**秘密鍵はGitHubに置かない**。1Password 等のオフライン保管庫でのみ管理する。
+  - 保存先: `s3://<R2_BUCKET>/prod/YYYY/MM/DD/dump.custom.gz.age`。世代管理（日次7/週次5/月次12）は
+    R2側のライフサイクルルールで設定する（未設定なら手動で定期削除）。
+  - PITR（Point-in-Time Recovery）は未導入。導入する場合は Supabase Pro + PITRアドオンが必要
+    （費用試算は同設計書 4章）。当面はこの日次バックアップのみで運用し、RPOは最大24時間として扱う。
 
 ## 3. リストア（復旧）
 1. 影響範囲を確認（全社 or 単一テナントか）。
 2. Supabase の Backups から復元点を選択して復元、または pg_dump のダンプを `psql` で流し込む。
+   - R2に退避した暗号化ダンプを使う場合: `age --decrypt -i <秘密鍵ファイル> -o dump.custom.gz dump.custom.gz.age`
+     → `gunzip dump.custom.gz` → `pg_restore --clean --no-owner -d <接続文字列> dump.custom`
+   - **本番へ直接復元しない**。まず別プロジェクト（staging）に復元して検証してから切替を判断する。
 3. 復元後、`/api/health` が `db:up`、主要画面（/admin, /admin/payroll, /admin/compliance）が開くことを確認。
 4. `npm run dogfood` で1社分の通し（給与/台帳/抵触日）を実行し、集計が正しいことを確認。
+5. **月1回、上記1〜4を実際に演習する**（リストアできないバックアップは無い物として扱う）。演習結果をこのRUNBOOKの変更履歴として残す。
 
 ## 4. マイグレーションの運用とロールバック
 - **適用**: `db/migrations/` に `NNNN_*.sql`（冪等）を追加し main にマージ → GitHub Actions「DB Migrate」が自動適用（`schema_migrations` で適用済み管理）。手動は Actions → Run workflow。

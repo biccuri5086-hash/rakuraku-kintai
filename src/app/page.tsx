@@ -94,9 +94,13 @@ export default function HomePage() {
     setClockError(null);
     setLoading(true);
 
+    // 通信リトライ・多重タップでも同じ打刻に収束させるための冪等キー。
+    // 失敗時の再試行でも同じキーを使い回すため、押下のたびに1回だけ採番する。
+    const idempotencyKey = crypto.randomUUID();
+
     const res = await authedFetch("/api/me/clock", {
       method: "POST",
-      body: JSON.stringify({ type }),
+      body: JSON.stringify({ type, idempotencyKey }),
     });
     const data = await res.json();
 

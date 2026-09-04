@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLineUserCached } from "@/lib/me-session";
+import { getLineUserCached, refreshSessionCompanyId } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { normalizePhone } from "@/lib/phone";
 import { encryptPhone, hashPhone } from "@/lib/crypto";
@@ -108,6 +108,10 @@ export async function POST(req: NextRequest) {
       });
 
     if (error) throw new Error(`supabase: ${error.message}`);
+
+    // 登録直後の打刻APIが company_id 未確定のまま古いCookieを見て
+    // 再度DBを引かずに済むよう、確定した company_id をCookieに反映しておく。
+    await refreshSessionCompanyId(user, companyId);
 
     await logAudit(
       req,

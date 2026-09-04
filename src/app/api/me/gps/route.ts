@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLineUserCached } from "@/lib/me-session";
+import { getLineSessionCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { errorResponse } from "@/lib/api-handler";
 
 export async function POST(req: NextRequest) {
   try {
-  const user = await getLineUserCached(req);
-  if (!user) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
+  const session = await getLineSessionCached(req);
+  if (!session) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
+  const { user, companyId } = session;
 
   let attendanceId: string;
   let lat: number;
@@ -25,23 +26,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, message: "不正なリクエスト" }, { status: 400 });
   }
 
-  const supabase = getSupabaseAdmin();
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("company_id")
-    .eq("user_id", user.userId)
-    .maybeSingle();
-
-  if (!profile?.company_id) {
+  if (!companyId) {
     return NextResponse.json({ ok: false, message: "プロフィール未登録" }, { status: 400 });
   }
 
+  const supabase = getSupabaseAdmin();
   const { error } = await supabase
     .from("attendance")
     .update({ lat, lng, gps_accuracy: accuracy })
     .eq("id", attendanceId)
     .eq("user_id", user.userId)
-    .eq("company_id", profile.company_id);
+    .eq("company_id", companyId);
 
   if (error) {
     return NextResponse.json({ ok: false, message: "GPS更新に失敗" }, { status: 500 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLineUserCached } from "@/lib/me-session";
+import { getLineSessionCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { errorResponse } from "@/lib/api-handler";
 import { resolveSessionState } from "@/lib/attendance-session";
@@ -9,26 +9,21 @@ const LOOKBACK_HOURS = 72;
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await getLineUserCached(req);
-    if (!user) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
+    const session = await getLineSessionCached(req);
+    if (!session) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
+    const { user, companyId } = session;
 
-    const supabase = getSupabaseAdmin();
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("company_id")
-      .eq("user_id", user.userId)
-      .maybeSingle();
-
-    if (!profile?.company_id) {
+    if (!companyId) {
       return NextResponse.json({ ok: true, clockIn: null, clockOut: null, stale: false });
     }
 
+    const supabase = getSupabaseAdmin();
     const since = new Date(Date.now() - LOOKBACK_HOURS * 3_600_000).toISOString();
     const { data, error } = await supabase
       .from("attendance")
       .select("type, timestamp")
       .eq("user_id", user.userId)
-      .eq("company_id", profile.company_id)
+      .eq("company_id", companyId)
       .gte("timestamp", since)
       .order("timestamp", { ascending: false })
       .limit(10);

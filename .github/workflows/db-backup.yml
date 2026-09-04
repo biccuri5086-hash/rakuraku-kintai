@@ -1,0 +1,91 @@
+name: DB Backup
+
+# Supabase の標準バックアップ（日次・保持7日程度）とは別ベンダーの外部ストレージに、
+# 論理バックアップ(pg_dump)を毎日退避する。Supabase 側の障害・アカウント問題が
+# 起きても復元できるようにするための最終防衛線。
+# 設計書: らくらく勤怠/specs/ARCH_商用インフラ設計_v1.md 2章
+#
+# 必要な Secrets（すべて未設定でもワークフロー自体は失敗させず notice でスキップする）:
+#   DATABASE_URL     - Supabase の Session mode 接続文字列（IPv4対応。Settings → Database）
+#   AGE_PUBLIC_KEY    - age (https://github.com/FiloSottile/age) の公開鍵。secret鍵は
+#                       このリポジトリの外（1Password 等）で保管し、GitHub には置かない
+#   R2_ENDPOINT       - 例 https://<account_id>.r2.cloudflarestorage.com
+#   R2_ACCESS_KEY_ID
+#   R2_SECRET_ACCESS_KEY
+#   R2_BUCKET         - 例 rk-backups
+#
+# 実行タイミング:
+#  1) 毎日 JST 03:00（UTC 18:00）
+#  2) 手動（Actions タブ → DB Backup → Run workflow）
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Secret未設定ならここでスキップ
+        id: check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AGE_PUBLIC_KEY: ${{ secrets.AGE_PUBLIC_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$AGE_PUBLIC_KEY" ] || [ -z "$R2_ENDPOINT" ] || \
+             [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_BUCKET" ]; then
+            echo "::notice::バックアップ用 Secret が未設定のためスキップしました。Settings → Secrets and variables → Actions に登録すると次回から自動実行されます。運用手順書（らくらく勤怠/specs/運用手順書_RUNBOOK.md）参照。"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install pg_dump
+        if: steps.check.outputs.ready == 'true'
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install age
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          curl -sSL -o age.tar.gz https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+          tar -xzf age.tar.gz
+          sudo mv age/age /usr/local/bin/age
+          sudo mv age/age-keygen /usr/local/bin/age-keygen
+
+      - name: pg_dump → 圧縮 → 暗号化
+        if: steps.check.outputs.ready == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AGE_PUBLIC_KEY: ${{ secrets.AGE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          pg_dump --format=custom --no-owner --no-privileges --dbname="$DATABASE_URL" --file=dump.custom
+          gzip -9 dump.custom
+          age -r "$AGE_PUBLIC_KEY" -o dump.custom.gz.age dump.custom.gz
+
+      - name: Cloudflare R2 へアップロード
+        if: steps.check.outputs.ready == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          DEST="s3://${R2_BUCKET}/prod/$(date -u +%Y/%m/%d)/dump.custom.gz.age"
+          aws s3 cp dump.custom.gz.age "$DEST" --endpoint-url "$R2_ENDPOINT"
+          echo "::notice::バックアップを ${DEST} に保存しました"
+
+      - name: 失敗時の通知（DATABASE_URL到達性はあるがdumpに失敗した場合）
+        if: failure() && steps.check.outputs.ready == 'true'
+        run: echo "::error::DBバックアップに失敗しました。Actionsのログを確認し、必要ならリストア演習の前に原因を特定してください。"
