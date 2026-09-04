@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 import { resolveSessionState, canPunch, PunchType } from "@/lib/attendance-session";
+import { resolveClockInShift } from "@/lib/dispatch/resolveShift";
+import { jstDateOf } from "@/lib/jst";
 
 // セッション判定に必要な直近の打刻だけを見る（夜勤の日跨ぎに対応するためカレンダー日では区切らない）。
 const LOOKBACK_HOURS = 72;
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
     const since = new Date(Date.now() - LOOKBACK_HOURS * 3_600_000).toISOString();
     const { data: recent } = await supabase
       .from("attendance")
-      .select("type, timestamp")
+      .select("type, timestamp, assignment_id, client_id, shift_id, resolved_by")
       .eq("user_id", user.userId)
       .eq("company_id", companyId)
       .gte("timestamp", since)
@@ -67,6 +69,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: decision.message }, { status: decision.status });
     }
 
+    // 直行直帰対応：どの契約/派遣先の勤務かを解決する。
+    // clock_out は直前の clock_in と同じ現場とみなす（セッション中に現場が変わることは無い前提）。
+    // clock_in は当日/前日(夜勤対応)のシフトから解決し、黙って推測できないときは unresolved のまま記録する。
+    let shiftId: string | null = null;
+    let assignmentId: string | null = null;
+    let clientId: string | null = null;
+    let resolvedBy: "shift_match" | "manual" | "unresolved" | null = null;
+
+    if (type === "clock_out") {
+      const lastIn = (recent ?? []).find((p) => p.type === "clock_in");
+      if (lastIn) {
+        shiftId = (lastIn.shift_id as string | null) ?? null;
+        assignmentId = (lastIn.assignment_id as string | null) ?? null;
+        clientId = (lastIn.client_id as string | null) ?? null;
+        resolvedBy = (lastIn.resolved_by as typeof resolvedBy) ?? null;
+      }
+    } else {
+      const now = new Date().toISOString();
+      const today = jstDateOf(now);
+      const yesterday = jstDateOf(new Date(Date.now() - 24 * 3_600_000).toISOString());
+
+      const { data: myAssignments } = await supabase
+        .from("assignments")
+        .select("id, client_id")
+        .eq("company_id", companyId)
+        .eq("user_id", user.userId)
+        .eq("status", "active");
+
+      const assignmentIds = (myAssignments ?? []).map((a) => a.id as string);
+      let todaysShifts: { id: string; assignment_id: string; work_date: string }[] = [];
+      if (assignmentIds.length) {
+        const { data } = await supabase
+          .from("shifts")
+          .select("id, assignment_id, work_date")
+          .in("assignment_id", assignmentIds)
+          .in("work_date", [yesterday, today]);
+        todaysShifts = (data ?? []) as typeof todaysShifts;
+      }
+
+      const resolution = resolveClockInShift(
+        [yesterday, today],
+        todaysShifts.map((s) => ({ id: s.id, assignmentId: s.assignment_id, workDate: s.work_date })),
+        (myAssignments ?? []).map((a) => ({ id: a.id as string, clientId: (a.client_id as string | null) ?? null }))
+      );
+      shiftId = resolution.shiftId;
+      assignmentId = resolution.assignmentId;
+      clientId = resolution.clientId;
+      resolvedBy = resolution.resolvedBy;
+    }
+
     const { data, error } = await supabase
       .from("attendance")
       .insert({
@@ -77,6 +129,10 @@ export async function POST(req: NextRequest) {
         company_id: companyId,
         idempotency_key: idempotencyKey,
         lat, lng, gps_accuracy: accuracy,
+        shift_id: shiftId,
+        assignment_id: assignmentId,
+        client_id: clientId,
+        resolved_by: resolvedBy,
       })
       .select("id")
       .single();

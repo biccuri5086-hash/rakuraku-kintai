@@ -32,6 +32,7 @@ type Row = {
   hourlyRate: number | null;
   estimatedPay: number | null;
   needsReview: boolean;
+  ratesMixed: boolean;
   entries: DayEntry[];
 };
 
@@ -315,7 +316,13 @@ export default function PayrollPage() {
                           {r.holidayMin > 0 ? hm(r.holidayMin) : <span className="text-gray-300">-</span>}
                         </td>
                         <td className="px-3 py-3 text-right text-gray-500">
-                          {r.hourlyRate != null ? `¥${r.hourlyRate.toLocaleString()}` : <span className="text-gray-300">未設定</span>}
+                          {r.hourlyRate != null ? (
+                            `¥${r.hourlyRate.toLocaleString()}`
+                          ) : r.ratesMixed ? (
+                            <span title="月内で複数の派遣先/時給が混在（各日の明細を確認）">複数</span>
+                          ) : (
+                            <span className="text-gray-300">未設定</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right font-bold text-gray-800">
                           {r.estimatedPay != null ? yen(r.estimatedPay) : <span className="text-gray-300 font-normal">-</span>}

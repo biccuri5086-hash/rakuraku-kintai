@@ -5,6 +5,7 @@ import { jstMonthBounds, jstThisMonth } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { aggregatePayroll } from "@/lib/payroll/aggregate";
 import { loadFullSettings } from "@/lib/payroll/companySettings";
+import { rowToAssignment, rowToPayRule, resolveDayRate } from "@/lib/payroll/payRules";
 import type { PunchEvent } from "@/lib/payroll/types";
 
 // 月次の締め（確定）。timesheets / timesheet_entries に保存する。
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     const monthFirst = `${month}-01`;
     const nextFirst = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`;
 
-    const [{ data: punches, error: pErr }, { data: assignments }, { data: shifts }] = await Promise.all([
+    const [{ data: punches, error: pErr }, { data: assignments }, { data: shifts }, { data: payRuleRows }] = await Promise.all([
       supabase
         .from("attendance")
         .select("user_id, user_name, type, timestamp")
@@ -69,17 +70,19 @@ export async function POST(req: NextRequest) {
         .gte("timestamp", start)
         .lt("timestamp", end)
         .order("timestamp", { ascending: true }),
-      supabase.from("assignments").select("id, user_id, hourly_rate, start_date").eq("company_id", ctx.companyId).order("start_date", { ascending: false }),
+      supabase.from("assignments").select("id, user_id, client_id, hourly_rate, start_date, end_date").eq("company_id", ctx.companyId).order("start_date", { ascending: false }),
       supabase.from("shifts").select("assignment_id, work_date, break_minutes").eq("company_id", ctx.companyId).gte("work_date", monthFirst).lt("work_date", nextFirst),
+      supabase
+        .from("pay_rules")
+        .select("*")
+        .eq("company_id", ctx.companyId)
+        .lte("effective_from", nextFirst)
+        .or(`effective_to.is.null,effective_to.gt.${monthFirst}`),
     ]);
     if (pErr) throw pErr;
 
-    const hourlyRateByUser = new Map<string, number>();
     const assignToUser = new Map<string, string>();
-    for (const a of assignments ?? []) {
-      assignToUser.set(a.id as string, a.user_id as string);
-      if (a.hourly_rate != null && !hourlyRateByUser.has(a.user_id as string)) hourlyRateByUser.set(a.user_id as string, Number(a.hourly_rate));
-    }
+    for (const a of assignments ?? []) assignToUser.set(a.id as string, a.user_id as string);
     const shiftBreakByKey = new Map<string, number>();
     for (const sh of shifts ?? []) {
       const uid = assignToUser.get(sh.assignment_id as string);
@@ -88,7 +91,19 @@ export async function POST(req: NextRequest) {
       shiftBreakByKey.set(key, (shiftBreakByKey.get(key) ?? 0) + Number(sh.break_minutes));
     }
 
-    const rows = aggregatePayroll({ punches: (punches ?? []) as PunchEvent[], settings, shiftBreakByKey, hourlyRateByUser });
+    // 掛け持ち対応：日ごとに契約(派遣先)とレートを解決する（preview と同じロジック）。
+    const assignmentRows = (assignments ?? []).map(rowToAssignment);
+    const payRules = (payRuleRows ?? []).map(rowToPayRule);
+    const companyDefaults = {
+      overtimeRate: settings.overtimeRate,
+      overtime60Rate: settings.overtime60Rate,
+      nightRate: settings.nightRate,
+      holidayRate: settings.holidayRate,
+    };
+    const dayRate = (userId: string, date: string) =>
+      resolveDayRate(date, userId, ctx.companyId, assignmentRows, payRules, companyDefaults);
+
+    const rows = aggregatePayroll({ punches: (punches ?? []) as PunchEvent[], settings, shiftBreakByKey, dayRate });
 
     const now = new Date().toISOString();
     let saved = 0;
@@ -123,6 +138,8 @@ export async function POST(req: NextRequest) {
           timesheet_id: tsId,
           company_id: ctx.companyId,
           work_date: e.date,
+          assignment_id: e.assignmentId ?? null,
+          client_id: e.clientId ?? null,
           in_at: e.inAt,
           out_at: e.outAt,
           work_min: e.workMin,
@@ -130,6 +147,13 @@ export async function POST(req: NextRequest) {
           night_min: e.nightMin,
           holiday_min: e.holidayMin,
           flags: e.flags,
+          // 確定時点で適用したレートを固定保存する。以後 pay_rules を改定しても、
+          // この確定済み金額は再計算されない（監査・労使紛争対応のため）。
+          applied_pay_rule_id: e.appliedPayRuleId ?? null,
+          applied_hourly_rate: e.appliedHourlyRate ?? null,
+          applied_overtime_rate: e.appliedOvertimeRate ?? null,
+          applied_night_rate: e.appliedNightRate ?? null,
+          applied_holiday_rate: e.appliedHolidayRate ?? null,
         }));
         const { error: eErr } = await supabase.from("timesheet_entries").insert(entryRows);
         if (eErr) return NextResponse.json({ ok: false, message: MIGRATION_MSG, detail: eErr.message }, { status: 409 });

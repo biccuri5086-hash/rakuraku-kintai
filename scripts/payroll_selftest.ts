@@ -12,6 +12,7 @@ import { aggregatePayroll } from "../src/lib/payroll/aggregate";
 import { DEFAULT_PAYROLL_SETTINGS } from "../src/lib/payroll/settings";
 import { jstDowOfDate } from "../src/lib/payroll/time";
 import { PunchEvent } from "../src/lib/payroll/types";
+import { resolveDayRate, AssignmentRow, PayRuleRow } from "../src/lib/payroll/payRules";
 
 let failed = 0;
 function eq(name: string, got: unknown, want: unknown) {
@@ -89,6 +90,95 @@ const one = (ps: PunchEvent[]) => aggregatePayroll({ punches: ps, settings: S, h
   eq("ot60 overtime60Min", r.overtime60Min, 1200); // 4800-3600
   // 概算: 9600*1.0 + 3600*1.25 + 1200*1.5 = 9600+4500+1800 = 15900分相当 → 1000/60*15900
   eq("ot60 estPay", r.estimatedPay, 265000);
+}
+
+// --- 掛け持ち（同月に複数派遣先）でも正しい時給が使われることの検証 ---
+// これが今回のバグ修正の本題：user_id ごとに1つの時給ではなく、日ごとに契約(派遣先)を
+// 解決して、その契約の時給で支払額を計算する。
+{
+  const COMPANY = "co1";
+  const assignments: AssignmentRow[] = [
+    // 前半：派遣先A・時給1200円（1〜15日）
+    { id: "asg-a", userId: "u", clientId: "client-a", hourlyRate: 1200, startDate: "2026-09-01", endDate: "2026-09-15" },
+    // 後半：派遣先B・時給1500円（16〜30日）
+    { id: "asg-b", userId: "u", clientId: "client-b", hourlyRate: 1500, startDate: "2026-09-16", endDate: "2026-09-30" },
+  ];
+  const payRules: PayRuleRow[] = []; // pay_rules 未登録でも assignments.hourlyRate にフォールバックする
+  const defaults = { overtimeRate: S.overtimeRate, overtime60Rate: S.overtime60Rate, nightRate: S.nightRate, holidayRate: S.holidayRate };
+  const dayRate = (userId: string, date: string) => resolveDayRate(date, userId, COMPANY, assignments, payRules, defaults);
+
+  // 前半3日・後半3日、平日9:00-18:00（実働480分/日）
+  const ps: PunchEvent[] = [];
+  for (const day of ["2026-09-01", "2026-09-02", "2026-09-03"]) {
+    ps.push(P("u", "clock_in", `${day}T09:00:00+09:00`), P("u", "clock_out", `${day}T18:00:00+09:00`));
+  }
+  for (const day of ["2026-09-16", "2026-09-17", "2026-09-18"]) {
+    ps.push(P("u", "clock_in", `${day}T09:00:00+09:00`), P("u", "clock_out", `${day}T18:00:00+09:00`));
+  }
+  const r = aggregatePayroll({ punches: ps, settings: S, dayRate })[0];
+
+  eq("dual-assignment workMin total", r.workMin, 480 * 6);
+  eq("dual-assignment ratesMixed", r.ratesMixed, true);
+  eq("dual-assignment hourlyRate is null (mixed)", r.hourlyRate, null);
+  // 修正前のバグ：全480*6分が片方の時給(例:1500)で計算されてしまっていた（1500/60*2880=72000）。
+  // 修正後：前半3日は1200円、後半3日は1500円で正しく按分される。
+  eq("dual-assignment estPay uses per-day rate", r.estimatedPay, Math.round((1200 / 60) * 1440 + (1500 / 60) * 1440));
+  eq("dual-assignment entry1 assignmentId", r.entries.find((e) => e.date === "2026-09-01")?.assignmentId, "asg-a");
+  eq("dual-assignment entry2 assignmentId", r.entries.find((e) => e.date === "2026-09-16")?.assignmentId, "asg-b");
+  eq("dual-assignment no review needed", r.needsReview, false);
+}
+
+// --- rate_unresolved の日も「月60h超」の累積カウントには含める ---
+// (バグ再現テスト：未解決日を累積から除外すると、以降の日の60h超判定がずれて過小払いになる)
+{
+  // 週1日・9:00-22:00（実働480・残業240/日）を19週分。最初の14週は契約なし(rate_unresolved)、
+  // 残り5週だけ契約でカバーする。7日おきの配置は既存の ot60 テストと同様、週40h按分を避けるため。
+  const start = new Date(Date.UTC(2024, 0, 1));
+  const dates: string[] = [];
+  for (let i = 0; i < 19; i++) {
+    dates.push(new Date(start.getTime() + i * 7 * 86400000).toISOString().slice(0, 10));
+  }
+  const unresolvedDates = dates.slice(0, 14); // 累積残業 240*14=3360分（まだ60h未満）
+  const resolvedDates = dates.slice(14); // この5週(1200分)の一部が60h超に食い込むはず
+
+  const assignments: AssignmentRow[] = [
+    { id: "asg-a", userId: "u", clientId: "client-a", hourlyRate: 1000, startDate: resolvedDates[0], endDate: resolvedDates[resolvedDates.length - 1] },
+  ];
+  const defaults = { overtimeRate: S.overtimeRate, overtime60Rate: S.overtime60Rate, nightRate: S.nightRate, holidayRate: S.holidayRate };
+  const dayRate = (userId: string, date: string) => resolveDayRate(date, userId, "co1", assignments, [], defaults);
+
+  const ps: PunchEvent[] = [];
+  for (const day of dates) {
+    ps.push(P("u", "clock_in", `${day}T09:00:00+09:00`), P("u", "clock_out", `${day}T22:00:00+09:00`));
+  }
+  const r = aggregatePayroll({ punches: ps, settings: S, dayRate })[0];
+
+  // 累積: 未解決14週で3360分消費 → 解決5週(1200分)のうち 240分は60h未満側、960分は60h超側。
+  // 未解決日を累積から除外するバグがあると、解決5週の残業は「まだ0分から積み上げ」扱いになり
+  // 1200分すべてが誤って60h未満(1.25倍)側で計算されてしまう＝過小払い。
+  const expectedOt60 = 960, expectedOtBase = 240;
+  const expected = Math.round(
+    (1000 / 60) * (480 * 5 + expectedOtBase * S.overtimeRate + expectedOt60 * S.overtime60Rate)
+  );
+  eq("unresolved days still count toward monthly OT60 cumulative", r.estimatedPay, expected);
+}
+
+// --- dayRate で契約が特定できない日は要確認（黙って丸めない） ---
+{
+  const assignments: AssignmentRow[] = [
+    { id: "asg-a", userId: "u", clientId: "client-a", hourlyRate: 1200, startDate: "2026-09-01", endDate: "2026-09-05" },
+  ];
+  const defaults = { overtimeRate: S.overtimeRate, overtime60Rate: S.overtime60Rate, nightRate: S.nightRate, holidayRate: S.holidayRate };
+  const dayRate = (userId: string, date: string) => resolveDayRate(date, userId, "co1", assignments, [], defaults);
+  // 契約期間外(9/10)の打刻
+  const r = aggregatePayroll({
+    punches: [P("u", "clock_in", "2026-09-10T09:00:00+09:00"), P("u", "clock_out", "2026-09-10T18:00:00+09:00")],
+    settings: S,
+    dayRate,
+  })[0];
+  eq("unresolved rate needsReview", r.needsReview, true);
+  eq("unresolved rate flag", r.entries[0].flags.includes("rate_unresolved"), true);
+  eq("unresolved rate still counts workMin", r.workMin, 480);
 }
 
 // --- 派遣先報告 ---

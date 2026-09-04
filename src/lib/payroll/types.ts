@@ -48,7 +48,16 @@ export interface DayEntry {
   nightMin: number; // 深夜（22-5時・overlay）
   holidayMin: number; // 法定休日労働
   isStatutoryHoliday: boolean;
-  flags: string[]; // "missing_punch" / "needs_review"
+  flags: string[]; // "missing_punch" / "needs_review" / "rate_unresolved" / "assignment_ambiguous"
+  // 掛け持ち対応：この日がどの契約/派遣先のものと解決されたか（dayRate 未指定時は null のまま）
+  assignmentId?: string | null;
+  clientId?: string | null;
+  appliedHourlyRate?: number | null;
+  appliedPayRuleId?: string | null;
+  appliedOvertimeRate?: number | null;
+  appliedOvertime60Rate?: number | null;
+  appliedNightRate?: number | null;
+  appliedHolidayRate?: number | null;
 }
 
 // スタッフ×対象期間の集計（timesheets に対応）
@@ -64,8 +73,9 @@ export interface StaffPeriodResult {
   nightMin: number;
   holidayMin: number;
   paidMin: number; // work+overtime+holiday
-  hourlyRate: number | null;
+  hourlyRate: number | null; // dayRate 使用時、月内で時給が複数種類あれば null（ratesMixed=true）
   estimatedPay: number | null; // 概算（正式な給与計算ではない）
   needsReview: boolean; // 打刻漏れ等があり管理者確認が必要
+  ratesMixed: boolean; // 月内で複数の時給/派遣先が混在した（dayRate 未使用時は常に false）
   entries: DayEntry[];
 }

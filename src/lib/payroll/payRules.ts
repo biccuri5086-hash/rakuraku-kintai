@@ -75,3 +75,140 @@ export function resolvePayRule(
   });
   return candidates[0];
 }
+
+// ============================================================
+// 掛け持ち対応：打刻日ごとに「どの契約(派遣先)の勤務だったか」を解決する。
+// ============================================================
+//
+// 【なぜ attendance.assignment_id ではなく assignments.start_date/end_date で解決するか】
+// 打刻時点でのシフト/現場紐付け（attendance.assignment_id）は今後の打刻にしか付かない。
+// 過去分・移行期間のデータも正しく集計できるよう、まず契約の期間（日付単位）で解決する。
+// 同日に複数の契約が重なる場合（直行直帰で同日に2現場）だけ ambiguous=true とし、
+// 管理者確認を要求する（黙って片方のレートを採用しない）。
+
+export interface AssignmentRow {
+  id: string;
+  userId: string;
+  clientId: string | null;
+  hourlyRate: number | null;
+  /** YYYY-MM-DD */
+  startDate: string;
+  /** YYYY-MM-DD。null = 期間未定（現在も継続） */
+  endDate: string | null;
+}
+
+export interface DailyAssignmentResolution {
+  assignmentId: string | null;
+  clientId: string | null;
+  hourlyRate: number | null;
+  /** 同日に複数の契約が重なっており、機械的に1つを選んだ（要確認） */
+  ambiguous: boolean;
+}
+
+/** userId・work_date（YYYY-MM-DD）から、その日に有効だった契約を解決する。 */
+export function resolveDailyAssignment(
+  userId: string,
+  workDate: string,
+  assignments: AssignmentRow[]
+): DailyAssignmentResolution {
+  const matches = assignments.filter(
+    (a) => a.userId === userId && a.startDate <= workDate && (a.endDate === null || a.endDate >= workDate)
+  );
+  if (matches.length === 0) return { assignmentId: null, clientId: null, hourlyRate: null, ambiguous: false };
+
+  matches.sort((a, b) => (a.startDate < b.startDate ? 1 : a.startDate > b.startDate ? -1 : 0));
+  const picked = matches[0];
+  return {
+    assignmentId: picked.id,
+    clientId: picked.clientId,
+    hourlyRate: picked.hourlyRate,
+    ambiguous: matches.length > 1,
+  };
+}
+
+export interface ResolvedDayRate {
+  hourlyRate: number | null;
+  overtimeRate: number;
+  overtime60Rate: number;
+  nightRate: number;
+  holidayRate: number;
+  assignmentId: string | null;
+  clientId: string | null;
+  payRuleId: string | null;
+  ambiguous: boolean;
+}
+
+/** Supabase の assignments 行（snake_case）→ AssignmentRow */
+export function rowToAssignment(row: Record<string, unknown>): AssignmentRow {
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    clientId: row.client_id != null ? String(row.client_id) : null,
+    hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : null,
+    startDate: String(row.start_date),
+    endDate: row.end_date != null ? String(row.end_date) : null,
+  };
+}
+
+/** Supabase の pay_rules 行（snake_case）→ PayRuleRow */
+export function rowToPayRule(row: Record<string, unknown>): PayRuleRow {
+  return {
+    id: String(row.id),
+    companyId: String(row.company_id),
+    scope: row.scope as PayRuleScope,
+    clientId: row.client_id != null ? String(row.client_id) : null,
+    assignmentId: row.assignment_id != null ? String(row.assignment_id) : null,
+    effectiveFrom: String(row.effective_from),
+    effectiveTo: row.effective_to != null ? String(row.effective_to) : null,
+    baseHourlyRate: row.base_hourly_rate != null ? Number(row.base_hourly_rate) : null,
+    overtimeRate: Number(row.overtime_rate),
+    overtime60Rate: Number(row.overtime60_rate),
+    nightRate: Number(row.night_rate),
+    holidayRate: Number(row.holiday_rate),
+  };
+}
+
+export interface CompanyDefaultRates {
+  overtimeRate: number;
+  overtime60Rate: number;
+  nightRate: number;
+  holidayRate: number;
+}
+
+/**
+ * 打刻日ごとの適用レートを解決する（給与集計 aggregatePayroll の dayRate として渡す想定）。
+ * 優先順位: pay_rules(assignment>client>company) の値 → 無ければ assignments.hourly_rate /
+ * 会社の既定割増率にフォールバックする（pay_rules 未整備でも既存の契約データだけで動く）。
+ * その日の契約が特定できない（0件）場合は null を返す＝呼び出し側は要確認扱いにすること。
+ */
+export function resolveDayRate(
+  workDate: string,
+  userId: string,
+  companyId: string,
+  assignments: AssignmentRow[],
+  payRules: PayRuleRow[],
+  companyDefaults: CompanyDefaultRates
+): ResolvedDayRate | null {
+  const asg = resolveDailyAssignment(userId, workDate, assignments);
+  if (asg.assignmentId === null) return null;
+
+  const rule = resolvePayRule(
+    workDate,
+    { companyId, clientId: asg.clientId, assignmentId: asg.assignmentId },
+    payRules
+  );
+
+  const hourlyRate = rule?.baseHourlyRate ?? asg.hourlyRate ?? null;
+
+  return {
+    hourlyRate,
+    overtimeRate: rule?.overtimeRate ?? companyDefaults.overtimeRate,
+    overtime60Rate: rule?.overtime60Rate ?? companyDefaults.overtime60Rate,
+    nightRate: rule?.nightRate ?? companyDefaults.nightRate,
+    holidayRate: rule?.holidayRate ?? companyDefaults.holidayRate,
+    assignmentId: asg.assignmentId,
+    clientId: asg.clientId,
+    payRuleId: rule?.id ?? null,
+    ambiguous: asg.ambiguous,
+  };
+}

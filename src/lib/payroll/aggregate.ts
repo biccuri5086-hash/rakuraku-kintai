@@ -13,6 +13,7 @@
 import { PunchEvent, PayrollSettings, DayEntry, StaffPeriodResult } from "./types";
 import { jstDateOf, jstDowOfDate, nightMinutes, weekKey } from "./time";
 import { roundMinutes, deemedBreak } from "./settings";
+import { ResolvedDayRate } from "./payRules";
 
 const DAILY_LEGAL_MIN = 480; // 8h
 const WEEKLY_LEGAL_MIN = 2400; // 40h
@@ -22,7 +23,13 @@ export interface AggregateInput {
   punches: PunchEvent[];
   settings: PayrollSettings;
   shiftBreakByKey?: Map<string, number>; // key = `${user_id}|${YYYY-MM-DD}` → シフト休憩分
-  hourlyRateByUser?: Map<string, number>; // 概算用の時給
+  hourlyRateByUser?: Map<string, number>; // 概算用の時給（dayRate 未指定時のみ使用。月内で1レート固定）
+  /**
+   * 掛け持ち対応：日ごとにレートを解決する関数。指定された場合、hourlyRateByUser より優先し、
+   * 日ごとに異なる派遣先/契約のレートで概算給与を計算する（月内で複数レートが混在してよい）。
+   * 該当レートが解決できない日は "rate_unresolved" フラグを立て、要確認とする。
+   */
+  dayRate?: (userId: string, date: string) => ResolvedDayRate | null;
 }
 
 type Session = { in: string; out: string };
@@ -80,7 +87,7 @@ function applyWeekly40(entries: DayEntry[], weekStart: number): void {
 }
 
 export function aggregatePayroll(input: AggregateInput): StaffPeriodResult[] {
-  const { settings } = input;
+  const { settings, dayRate } = input;
   const shiftBreak = input.shiftBreakByKey ?? new Map<string, number>();
   const rateMap = input.hourlyRateByUser ?? new Map<string, number>();
   const roundDay = settings.roundScope === "day" && settings.roundUnitMin > 1;
@@ -180,7 +187,37 @@ export function aggregatePayroll(input: AggregateInput): StaffPeriodResult[] {
 
     applyWeekly40(entries, settings.weekStart);
 
-    // 期間合計
+    // dayRate（掛け持ち対応）が指定されている場合、日ごとのレートを解決してタグ付けする。
+    // 月60時間の閾値は「日付順の累積」で日ごとに配分する（先に働いた日から60hを消費する）。
+    let ratesMixed = false;
+    let dayRateUnresolved = false;
+    if (dayRate) {
+      let firstRate: number | null | undefined = undefined;
+      const chronological = [...entries]
+        .filter((e) => !e.flags.includes("missing_punch"))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      for (const e of chronological) {
+        const dr = dayRate(user_id, e.date);
+        if (!dr || dr.hourlyRate == null) {
+          dayRateUnresolved = true;
+          e.flags = [...e.flags, "rate_unresolved"];
+          continue;
+        }
+        e.assignmentId = dr.assignmentId;
+        e.clientId = dr.clientId;
+        e.appliedHourlyRate = dr.hourlyRate;
+        e.appliedPayRuleId = dr.payRuleId;
+        e.appliedOvertimeRate = dr.overtimeRate;
+        e.appliedOvertime60Rate = dr.overtime60Rate;
+        e.appliedNightRate = dr.nightRate;
+        e.appliedHolidayRate = dr.holidayRate;
+        if (dr.ambiguous) e.flags = [...e.flags, "assignment_ambiguous"];
+        if (firstRate === undefined) firstRate = dr.hourlyRate;
+        else if (firstRate !== dr.hourlyRate) ratesMixed = true;
+      }
+    }
+
+    // 期間合計（実働時間は dayRate の解決可否に関わらず計上する＝レート不明でも労働時間は事実）
     let grossMin = 0, breakMin = 0, workMin = 0, overtimeMin = 0, nightMin = 0, holidayMin = 0;
     let workedDays = 0, needsReview = false;
     for (const e of entries) {
@@ -188,6 +225,9 @@ export function aggregatePayroll(input: AggregateInput): StaffPeriodResult[] {
       if (e.flags.includes("missing_punch")) {
         needsReview = true;
         continue; // 締め対象外
+      }
+      if (e.flags.includes("rate_unresolved") || e.flags.includes("assignment_ambiguous")) {
+        needsReview = true;
       }
       grossMin += e.grossMin;
       breakMin += e.breakMin;
@@ -209,24 +249,63 @@ export function aggregatePayroll(input: AggregateInput): StaffPeriodResult[] {
     const overtimeBaseMin = overtimeMin - overtime60Min;
 
     const paidMin = workMin + overtimeMin + holidayMin;
-    const rate = rateMap.get(user_id) ?? null;
-    // 概算：通常=1.0、残業=overtimeRate、60h超残業=overtime60Rate、法定休日=holidayRate、深夜は上乗せ(nightRate-1)
-    const estimatedPay =
-      rate != null
-        ? Math.round(
-            (rate / 60) *
-              (workMin +
-                overtimeBaseMin * settings.overtimeRate +
-                overtime60Min * settings.overtime60Rate +
-                holidayMin * settings.holidayRate +
-                nightMin * (settings.nightRate - 1))
-          )
-        : null;
+
+    let rate: number | null;
+    let estimatedPay: number | null;
+
+    if (dayRate) {
+      // 日ごとのレートで支払額を積み上げる（月60h超過分は日付順の累積で配分）。
+      // レート未解決の日も cumulativeOt には含める（=その日の残業時間も月60hの消費に数える）。
+      // そうしないと未解決日の残業分だけ「無かったこと」になり、以降の日の60h超判定がずれる。
+      // 支払額（sum）にはレート未解決の日を含めない（黙って誤ったレートで払わない）。
+      let sum = 0;
+      let cumulativeOt = 0;
+      let anyResolved = false;
+      const chronological = [...entries]
+        .filter((e) => !e.flags.includes("missing_punch"))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      for (const e of chronological) {
+        const cumBefore = cumulativeOt;
+        cumulativeOt += e.overtimeMin;
+        const excessBefore = Math.max(0, cumBefore - MONTHLY_OT60_MIN);
+        const excessAfter = Math.max(0, cumulativeOt - MONTHLY_OT60_MIN);
+        const dayOt60 = excessAfter - excessBefore;
+        const dayOtBase = e.overtimeMin - dayOt60;
+        if (e.flags.includes("rate_unresolved")) continue;
+        anyResolved = true;
+        const r = e.appliedHourlyRate ?? 0;
+        sum +=
+          (r / 60) *
+          (e.workMin +
+            dayOtBase * (e.appliedOvertimeRate ?? settings.overtimeRate) +
+            dayOt60 * (e.appliedOvertime60Rate ?? settings.overtime60Rate) +
+            e.holidayMin * (e.appliedHolidayRate ?? settings.holidayRate) +
+            e.nightMin * ((e.appliedNightRate ?? settings.nightRate) - 1));
+      }
+      estimatedPay = anyResolved ? Math.round(sum) : null;
+      const resolvedEntries = chronological.filter((e) => !e.flags.includes("rate_unresolved"));
+      rate = ratesMixed || dayRateUnresolved ? null : resolvedEntries[0]?.appliedHourlyRate ?? null;
+      if (dayRateUnresolved) needsReview = true;
+    } else {
+      rate = rateMap.get(user_id) ?? null;
+      // 概算：通常=1.0、残業=overtimeRate、60h超残業=overtime60Rate、法定休日=holidayRate、深夜は上乗せ(nightRate-1)
+      estimatedPay =
+        rate != null
+          ? Math.round(
+              (rate / 60) *
+                (workMin +
+                  overtimeBaseMin * settings.overtimeRate +
+                  overtime60Min * settings.overtime60Rate +
+                  holidayMin * settings.holidayRate +
+                  nightMin * (settings.nightRate - 1))
+            )
+          : null;
+    }
 
     results.push({
       user_id, staff_name: st.name, workedDays,
       grossMin, breakMin, workMin, overtimeMin, overtime60Min, nightMin, holidayMin, paidMin,
-      hourlyRate: rate, estimatedPay, needsReview, entries,
+      hourlyRate: rate, estimatedPay, needsReview, ratesMixed, entries,
     });
   }
 

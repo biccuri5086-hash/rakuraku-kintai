@@ -5,6 +5,7 @@ import { jstMonthBounds, jstThisMonth } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { aggregatePayroll } from "@/lib/payroll/aggregate";
 import { loadFullSettings } from "@/lib/payroll/companySettings";
+import { rowToAssignment, rowToPayRule, resolveDayRate } from "@/lib/payroll/payRules";
 import type { PunchEvent } from "@/lib/payroll/types";
 
 // Phase B: 給与集計プレビュー（読み取り専用・マイグレーション不要）。
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     const nextFirst = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`;
 
     const supabase = getSupabaseAdmin();
-    const [{ data: punches, error }, { data: assignments }, { data: shifts }] = await Promise.all([
+    const [{ data: punches, error }, { data: assignments }, { data: shifts }, { data: payRuleRows }] = await Promise.all([
       supabase
         .from("attendance")
         .select("user_id, user_name, type, timestamp")
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
         .order("timestamp", { ascending: true }),
       supabase
         .from("assignments")
-        .select("id, user_id, hourly_rate, start_date")
+        .select("id, user_id, client_id, hourly_rate, start_date, end_date")
         .eq("company_id", ctx.companyId)
         .order("start_date", { ascending: false }),
       supabase
@@ -54,18 +55,18 @@ export async function GET(req: NextRequest) {
         .eq("company_id", ctx.companyId)
         .gte("work_date", monthFirst)
         .lt("work_date", nextFirst),
+      // 対象月に少しでも重なる可能性のあるルールだけを取得（effective_to が対象月開始日より前のものは不要）
+      supabase
+        .from("pay_rules")
+        .select("*")
+        .eq("company_id", ctx.companyId)
+        .lte("effective_from", nextFirst)
+        .or(`effective_to.is.null,effective_to.gt.${monthFirst}`),
     ]);
     if (error) throw error;
 
-    // 時給：時給が入った契約のうち最新開始日のものをスタッフの概算用に採用
-    const hourlyRateByUser = new Map<string, number>();
     const assignToUser = new Map<string, string>();
-    for (const a of assignments ?? []) {
-      assignToUser.set(a.id as string, a.user_id as string);
-      if (a.hourly_rate != null && !hourlyRateByUser.has(a.user_id as string)) {
-        hourlyRateByUser.set(a.user_id as string, Number(a.hourly_rate));
-      }
-    }
+    for (const a of assignments ?? []) assignToUser.set(a.id as string, a.user_id as string);
 
     // シフト休憩を (user_id|日付) 単位で合算（あればみなし休憩より優先）
     const shiftBreakByKey = new Map<string, number>();
@@ -78,11 +79,25 @@ export async function GET(req: NextRequest) {
 
     // 会社設定を読む（company_payroll_settings 未適用ならデフォルトにフォールバック）
     const { settings, source: settingsSource } = await loadFullSettings(supabase, ctx.companyId);
+
+    // 掛け持ち対応：日ごとに契約(派遣先)とレートを解決する。
+    // pay_rules が未整備でも assignments.hourly_rate にフォールバックするため、常に有効。
+    const assignmentRows = (assignments ?? []).map(rowToAssignment);
+    const payRules = (payRuleRows ?? []).map(rowToPayRule);
+    const companyDefaults = {
+      overtimeRate: settings.overtimeRate,
+      overtime60Rate: settings.overtime60Rate,
+      nightRate: settings.nightRate,
+      holidayRate: settings.holidayRate,
+    };
+    const dayRate = (userId: string, date: string) =>
+      resolveDayRate(date, userId, ctx.companyId, assignmentRows, payRules, companyDefaults);
+
     const rows = aggregatePayroll({
       punches: (punches ?? []) as PunchEvent[],
       settings,
       shiftBreakByKey,
-      hourlyRateByUser,
+      dayRate,
     });
 
     if (format === "csv") {
@@ -109,7 +124,8 @@ export async function GET(req: NextRequest) {
         [
           r.user_id, r.staff_name, month,
           r.workMin, r.overtimeMin, r.overtime60Min, r.nightMin, r.holidayMin, r.paidMin,
-          minutesToHm(r.paidMin), r.hourlyRate ?? "", r.estimatedPay ?? "", r.needsReview ? "要確認" : "",
+          minutesToHm(r.paidMin), r.ratesMixed ? "複数" : r.hourlyRate ?? "", r.estimatedPay ?? "",
+          r.needsReview ? "要確認" : "",
         ].join(",")
       );
       const csv = "﻿" + [header.join(","), ...lines].join("\r\n") + "\r\n";
@@ -137,6 +153,7 @@ export async function GET(req: NextRequest) {
       hourlyRate: r.hourlyRate,
       estimatedPay: r.estimatedPay,
       needsReview: r.needsReview,
+      ratesMixed: r.ratesMixed,
       // 日次ドリルダウン用（管理画面で行を展開して各日を確認できる）
       entries: r.entries.map((e) => ({
         date: e.date,
@@ -150,6 +167,9 @@ export async function GET(req: NextRequest) {
         holidayMin: e.holidayMin,
         isStatutoryHoliday: e.isStatutoryHoliday,
         flags: e.flags,
+        assignmentId: e.assignmentId ?? null,
+        clientId: e.clientId ?? null,
+        appliedHourlyRate: e.appliedHourlyRate ?? null,
       })),
     }));
     const totals = rows.reduce(
