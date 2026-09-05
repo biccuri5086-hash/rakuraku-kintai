@@ -99,10 +99,10 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
     setSaving(false);
   };
 
-  const deleteCompany = async () => {
-    if (!confirm(`「${company?.name}」を完全に削除します。\n所属スタッフの全データも削除されます。\n本当によろしいですか？`)) return;
-    // 不可逆な操作のため、サーバ側で会社名の一致を必須にしている。誤操作・盗用セッションの一撃を防ぐ。
-    const typed = prompt(`確認のため、削除する会社名「${company?.name}」を正確に入力してください`);
+  const cancelCompany = async () => {
+    if (!confirm(`「${company?.name}」を解約します。\n\n・即座にログイン・打刻等ができなくなります\n・データは自動では消えません。30日以内であれば「状態」を「稼働中」に戻せば復旧できます\n・30日経過すると自動的に完全削除され、復旧できなくなります\n\nよろしいですか？`)) return;
+    // 不可逆な結果につながる操作のため、サーバ側で会社名の一致を必須にしている。誤操作・盗用セッションの一撃を防ぐ。
+    const typed = prompt(`確認のため、解約する会社名「${company?.name}」を正確に入力してください`);
     if (typed === null) return;
     const res = await fetch(`/api/superadmin/companies/${id}`, {
       method: "DELETE",
@@ -113,7 +113,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
       router.replace("/superadmin");
     } else {
       const data = await res.json().catch(() => ({}));
-      alert(data.message ?? "削除に失敗しました");
+      alert(data.message ?? "解約に失敗しました");
     }
   };
 
@@ -264,11 +264,13 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
         <section className="bg-white rounded-2xl shadow p-5 border-2 border-red-100">
           <h2 className="font-bold text-red-600 mb-2">危険操作</h2>
           <p className="text-xs text-slate-500 mb-3">
-            このテナントを削除すると、所属スタッフ {company.staff_count} 名のデータがすべて削除されます。
+            このテナントを解約すると、所属スタッフ {company.staff_count} 名を含めすぐに利用できなくなります。
+            データは即座には消えず、30日間は「状態」を「稼働中」に戻せば復旧できます。
+            30日経過後は自動的に完全削除され、復旧できなくなります。
           </p>
-          <button onClick={deleteCompany}
+          <button onClick={cancelCompany}
             className="flex items-center gap-1 border border-red-500 text-red-500 hover:bg-red-50 text-sm font-bold px-3 py-1.5 rounded-lg">
-            <Trash2 size={14} /> このテナントを削除
+            <Trash2 size={14} /> このテナントを解約する（30日後に完全削除）
           </button>
         </section>
       </main>

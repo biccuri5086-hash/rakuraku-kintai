@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
 import { resolveSessionState, canPunch, PunchType } from "@/lib/attendance-session";
+import { isCompanyBlocked } from "@/lib/tenant-context";
 
 // セッション判定に必要な直近の打刻だけを見る（夜勤の日跨ぎに対応するためカレンダー日では区切らない）。
 const LOOKBACK_HOURS = 72;
@@ -34,6 +35,10 @@ export async function POST(req: NextRequest) {
 
     if (!profile?.company_id) {
       return NextResponse.json({ ok: false, message: "プロフィール未登録です。先にスタッフ登録を済ませてください。" }, { status: 400 });
+    }
+
+    if (await isCompanyBlocked(profile.company_id)) {
+      return NextResponse.json({ ok: false, message: "このアカウントはご利用いただけません" }, { status: 403 });
     }
 
     const since = new Date(Date.now() - LOOKBACK_HOURS * 3_600_000).toISOString();

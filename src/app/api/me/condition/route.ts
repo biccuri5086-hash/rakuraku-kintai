@@ -3,6 +3,7 @@ import { getLineUserCached } from "@/lib/me-session";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { errorResponse } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit-log";
+import { isCompanyBlocked } from "@/lib/tenant-context";
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,6 +32,10 @@ export async function POST(req: NextRequest) {
 
     if (!profile?.company_id) {
       return NextResponse.json({ ok: false, message: "プロフィール未登録です" }, { status: 400 });
+    }
+
+    if (await isCompanyBlocked(profile.company_id)) {
+      return NextResponse.json({ ok: false, message: "このアカウントはご利用いただけません" }, { status: 403 });
     }
 
     const { data: settings } = await supabase

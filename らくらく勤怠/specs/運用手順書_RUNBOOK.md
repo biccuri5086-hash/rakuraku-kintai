@@ -54,23 +54,48 @@
 - **service_role / anon key**: Supabase で再発行 → Vercel 環境変数を更新 → Redeploy。
 - **SESSION_SECRET / PHONE_* 鍵**: 変更すると既存セッション無効化・暗号化データ復号不可になり得るため**原則変更しない**。必要時は移行手順を別途設計。
 
-## 6.5 解約時のデータ削除（利用規約第17条・プライバシーポリシー10条 対応）
+## 6.5 解約時のデータ削除（利用規約第17条・プライバシーポリシー10条 対応・自動化済み）
 
 利用規約・プライバシーポリシーで「解約後30日でデータを完全削除する」と約束している。
-**現状、自動削除の仕組みは無く、運営者が手動で行う。** 解約が発生したら、以下を実施する。
+**2026年9月5日以降、これは自動化されている**（設計：`specs/テナント削除自動化_設計.md`、
+マイグレーション：`db/migrations/0007_tenant_cancellation.sql`、ハヤト/ノアのダブルチェック済み）。
+運営者が手動でSupabaseにDELETE文を書く運用、および即時物理削除だった旧`DELETE`APIは廃止した。
 
-1. 解約日を `communications/` 等に控え、**解約日+30日**をリマインド（自分のカレンダー等）。
-2. 猶予期間内に、契約者が打刻データ等をCSV等でエクスポート済みか確認する
-   （契約者からの申し出がなければ、当社側からエクスポート案内を送る）。
-3. 猶予期間（30日）経過後、Supabase の SQL Editor で、当該 `company_id` に紐づくデータ
-   （`user_profiles` / `attendance` / `condition_reports` / `admins` / `assignments` /
-   `timesheets` 等、`company_id` を持つ全テーブル）を削除する。**削除前に念のため手動バックアップ**
-   （本書 2章）を取得しておく。
-4. 削除後、`companies` テーブルの当該行も削除又は「解約済み」ステータスに更新する。
-5. 削除が完了したら、契約者に完了の旨を連絡する。
+### 解約の手順（運営者がやること）
+1. `/superadmin/companies/[id]` を開き、契約者が打刻データ等をCSV等でエクスポート済みか確認する
+   （申し出がなければ、当社側からエクスポート案内を送る）。
+2. 同じ画面で「状態」を「解約済み」にする、または「このテナントを解約する（30日後に完全削除）」
+   ボタンを押す（会社名の再入力による確認あり）。**この時点ではデータは消えない**
+   （`status='cancelled'`, `cancelled_at`が記録されるだけ）。
+3. 30日以内に契約者から連絡があれば、「状態」を「稼働中」に戻すだけで完全に復旧できる。
+4. 30日経過すると、Supabaseの`pg_cron`が毎晩自動で物理削除する。運営者は何もしなくてよい。
 
-※ 法令上の保存義務がある情報（該当する場合）は削除対象から除外する。
-※ 解約件数が増えてきたら、上記を自動化するバッチ処理の実装を検討する（Rule 1：コスト・実装judgmentのためオーナー承認要）。
+### 月次の目視確認（ノア指摘：自動バッチが止まっていないかの確認）
+自動化されているとはいえ、`pg_cron`が何らかの理由で停止すると誰も気づけない
+（＝規約で約束した「30日で削除」を守れなくなる）。**月1回程度**、以下を確認する。
+
+```sql
+-- 直近の実行結果を確認（解約中の会社があるのに実行記録が無ければ要調査）
+select action, details, created_at
+from admin_audit_log
+where action in ('system_company_purge', 'system_company_purge_failed')
+order by created_at desc
+limit 20;
+
+-- スケジュールが有効なままか確認
+select jobname, schedule, active from cron.job
+where jobname = 'purge_cancelled_companies_daily';
+
+-- 30日を超えているのにまだ残っている「解約済み」会社が無いか確認（0行が正常）
+select id, name, cancelled_at from companies
+where status = 'cancelled' and cancelled_at <= now() - interval '31 days';
+```
+
+最後のクエリで行が出た場合、自動バッチが止まっている可能性がある。`cron.job`の`active`が
+falseになっていないか、`select purge_cancelled_companies();`を手動実行してエラーが出ないか確認する。
+
+※ 法令上の保存義務がある情報（該当する場合）は、実装時にこの削除フローの対象外とする想定。
+　現状はそのようなテーブルは無いため未対応（発生したら`purge_cancelled_companies()`を要修正）。
 
 ## 7. ステージング（推奨・未整備）
 - 現状 main → 本番直行。**推奨**: Vercel の Preview（PRごとの自動プレビュー）を検証環境として使う。DBは本番共有を避け、別 Supabase プロジェクトを Preview 用環境変数に割り当てるのが理想（着手候補）。
