@@ -19,11 +19,24 @@ export type SuperContext = {
   superAdminId: string;
 };
 
+// 解約(cancelled)・停止(suspended)された会社は、署名済みセッションが残っていても
+// 即座に締め出す。セッションは最長7日間有効なため、ここでDB側のstatusを都度確認しないと
+// 解約後も期限まで管理画面が使えてしまう(テナント削除自動化_設計.md 参照)。
+export async function isCompanyBlocked(companyId: string): Promise<boolean> {
+  const { data } = await getSupabaseAdmin()
+    .from("companies")
+    .select("status")
+    .eq("id", companyId)
+    .maybeSingle();
+  return !data || data.status === "cancelled" || data.status === "suspended";
+}
+
 export async function getTenantContext(): Promise<TenantContext | null> {
   const store = await cookies();
   const token = store.get(TENANT_SESSION_COOKIE)?.value;
   const payload = verifyTenantToken(token);
   if (!payload) return null;
+  if (await isCompanyBlocked(payload.companyId)) return null;
   return { adminId: payload.adminId, companyId: payload.companyId };
 }
 

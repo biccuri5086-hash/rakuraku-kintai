@@ -61,7 +61,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const update: Record<string, unknown> = {};
     if (typeof body.name === "string" && body.name.trim()) update.name = body.name.trim();
     if (typeof body.plan === "string" && VALID_PLANS.includes(body.plan as (typeof VALID_PLANS)[number])) update.plan = body.plan;
-    if (typeof body.status === "string" && VALID_STATUSES.includes(body.status as (typeof VALID_STATUSES)[number])) update.status = body.status;
+    if (typeof body.status === "string" && VALID_STATUSES.includes(body.status as (typeof VALID_STATUSES)[number])) {
+      update.status = body.status;
+      // 解約(cancelled)にした瞬間を記録する。30日後の自動物理削除の起点になる
+      // (テナント削除自動化_設計.md 参照)。cancelled以外に戻したら猶予カウントも解除する。
+      update.cancelled_at = body.status === "cancelled" ? new Date().toISOString() : null;
+    }
     if (typeof body.contact_name === "string")  update.contact_name = body.contact_name.trim() || null;
     if (typeof body.contact_email === "string") update.contact_email = body.contact_email.trim() || null;
     if (typeof body.contact_phone === "string") update.contact_phone = body.contact_phone.trim() || null;
@@ -104,8 +109,11 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const { data: company } = await supabase.from("companies").select("name").eq("id", id).maybeSingle();
     if (!company) return NextResponse.json({ ok: false, message: "見つかりません" }, { status: 404 });
 
-    // 不可逆な全社削除。セッションだけに依存せず、対象の会社名の再入力を必須にする
-    // （盗まれた/偽造されたセッションによる無差別削除・CSRF的な一撃を防ぐ二重確認）。
+    // このエンドポイントはもう即時の物理削除は行わない。会社名の再入力による確認は
+    // 引き続き必須にした上で、status='cancelled' + cancelled_at=now() をセットする
+    // だけの「解約」操作に変更した(テナント削除自動化_設計.md 参照)。
+    // 物理削除は解約から30日後にpg_cronの自動バッチが行う。それまでは
+    // statusをactiveに戻すだけで完全に復旧できる。
     if (!confirmationMatches(company.name, body.confirm)) {
       return NextResponse.json(
         { ok: false, message: "確認のため会社名を正確に入力してください", code: "CONFIRM_REQUIRED" },
@@ -113,12 +121,15 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
       );
     }
 
-    await logAudit(req, "super_company_delete", { name: company.name }, {
+    const { error } = await supabase
+      .from("companies")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+
+    await logAudit(req, "super_company_cancel", { name: company.name }, {
       actorType: "super_admin", actorId: guard.ctx.superAdminId, companyId: id,
     });
-
-    const { error } = await supabase.from("companies").delete().eq("id", id);
-    if (error) throw new Error(error.message);
 
     return NextResponse.json({ ok: true });
   } catch (e) {
