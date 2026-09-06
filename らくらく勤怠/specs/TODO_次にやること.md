@@ -21,9 +21,13 @@ Preview環境変数が staging に届いていない（`/api/health` が `projec
 - 参考：seedのSQL・接続情報は本ドキュメント下部と `db/staging-bootstrap.sql`
 
 ## B. 死活監視の仕上げ（Aで一部完了済み）
-- 🧑 UptimeRobot に `https://rakuraku-kintai.vercel.app/api/health` を登録（未なら）
+> **`specs/死活監視・アラート設定手順書.md` に画面操作つきの手順をまとめました。まずそれを開いてください。**
+> Sentry・GitHub Actions（Health Check）による監視の**仕組み自体はコードに実装済み**。
+> 残っているのは画面設定（通知ON）と動作確認のみ。UptimeRobot登録は不要（Health Checkが代替）。
+- 🧑 SentryのDSN（`SENTRY_DSN`・`NEXT_PUBLIC_SENTRY_DSN`）がVercelに登録されているか確認
 - 🧑 Sentry のアラートルール（新規Issue／急増）をメール通知ON
 - 🧑 Vercel の Deployment Failed 通知をON
+- 🧑 GitHubの通知設定でActionsの失敗通知が有効か確認
 
 ## C. 【最優先】販売前セキュリティ対応 — 専用の手順書あり
 > **`specs/手順書_販売前セキュリティ対応.md` に画面操作つきの手順をまとめてあります。まずそれを開いてください。**
