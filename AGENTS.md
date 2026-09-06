@@ -22,6 +22,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## 触る前に知っておくこと
 
+- **新機能の実装・改修を始める前に、必ず `architecture_state.md`（リポジトリ直下）を読む。**
+  既に実装済みの監視・削除フロー・認証の仕組みを知らずに重複実装する事故を防ぐためのインデックス。
+  実装状況が変わったら、気づいた側でこのファイルも更新する。
 - **RLSは使っていない。** 全テーブル RLS有効・anon向けポリシー0件で、アクセスは
   service_role のみ。**テナント分離はアプリ層の責任**で、各APIが `company_id` で
   絞ることで担保している。`scripts/tenant_isolation_test.ts` が
