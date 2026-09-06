@@ -47,6 +47,9 @@
 | ログイン弾かれる | パスワード誤り/レート制限 | `/admin/password`・`/superadmin/password` で再設定。15分待つ。rate_limits を確認 |
 | 新機能の画面が「準備中/未適用」 | マイグレーション未適用 | Actions → DB Migrate を実行（`npm run migrate` でも可） |
 | DB Migrate が exit 1 | Direct(IPv6) 接続文字列 | Secret `DATABASE_URL` を Session pooler(IPv4) に差し替え |
+| `TypeError: Invalid URL`（DB Migrate） | `DATABASE_URL` の値の前後に`"`（ダブルクォート）が入ったまま貼り付けている（コマンド例をそのままコピーした場合に起きやすい） | Secretを開き直し、`postgresql://`から始まって`/postgres`で終わる文字列**だけ**（引用符なし）に貼り替える |
+| `password authentication failed for user "postgres"`（DB Migrate） | ①パスワードが違う ②`Direct connection`の文字列を使っている（ユーザー名が`postgres.xxxx`ではなく`postgres`単体になっていないか確認） | Supabaseでパスワード再発行 → `Session pooler`タブの文字列を使う → Secretを更新 |
+| `information_schema.routine_privileges`でEXECUTE権限を確認したのに、REVOKEしたはずの関数が消えない | **同名の関数が複数スキーマに存在する**（例：`public`と`staging`に同名関数が別々に存在するケースが実際にあった）。スキーマを指定しないREVOKEは1つのスキーマにしか効かない | `select n.nspname, p.proname, p.proacl from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname='関数名'` でスキーマを特定し、`revoke execute on function <schema>.<関数名>() from public, anon, authenticated;` のようにスキーマ名を付けて実行する |
 | 集計値がおかしい | ロジック/データ不整合 | `npm run dogfood` と `npm test` で切り分け。打刻漏れは要確認で除外される仕様 |
 
 ## 6. 秘密情報のローテーション
