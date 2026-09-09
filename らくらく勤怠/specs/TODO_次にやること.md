@@ -19,22 +19,33 @@ Pro Planへのアップグレードで対応済み。残りの確認・仕上げ
 - 🧑/🤖 実際に一度リストア手順（RUNBOOK 3章）を安全な形で訓練する（本番データは使わない。
   下記「ステージング環境」の再作成後に行うのが安全）
 
-## A. ステージング環境の完成（保留中・後日・要作り直し）
+## A. ステージング環境の完成（保留中・後日・要新規作成）
 以前作成していたSupabaseプロジェクト（`xkrwwrittprbpxlvucuu`）が**アカウント上から
 無くなっていることを2026-09-09に確認**（無料プランの一時停止・自動削除等が原因と推測）。
-下記手順はこのプロジェクトの存在を前提にしているため、**再開する場合は新規プロジェクト作成から**。
+**新規プロジェクト作成からの再開が必要**。
 
-Preview環境変数が staging に届いていない（`/api/health` が `project: unknown`）状態で中断。
-（旧）再開時の手順の参考：
-1. 🧑 Vercel → Settings → Environment Variables で、**Preview用**の3変数が staging の値になっているか確認・修正
-   - `NEXT_PUBLIC_SUPABASE_URL` = `https://xkrwwrittprbpxlvucuu.supabase.co`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = staging の anon key
-   - `SUPABASE_SERVICE_ROLE_KEY` = staging の service_role key
+> 2026-09-09、AI側で手順を現状の自動マイグレーション方式（`npm run migrate` = `db/migrations/*.sql`
+> をファイル名順に適用）に合わせて更新済み。旧手順は`0006_rls_hardening.sql`・
+> `0007_tenant_cancellation.sql`（pg_cron含む）が反映されていなかった。
+> **すべてSupabase/Vercelの管理画面操作を伴うため、この先はオーナーの実操作が必要（AIは代行不可）。**
+
+再開手順：
+1. 🧑 https://supabase.com で新規プロジェクトを作成（リージョンは東京推奨）
+2. 🧑 プロジェクトの SQL Editor で `db/staging-bootstrap.sql` を丸ごと実行
+   （スキーマ一括作成・初期テナント作成まで。この時点で `schema_migrations` に0001〜0005が記録済みになる）
+3. 🧑/🤖 `DATABASE_URL="<新プロジェクトのpg接続文字列>" npm run migrate` を実行し、
+   `0006_rls_hardening.sql` と `0007_tenant_cancellation.sql`（pg_cronの物理削除ジョブ含む）を適用
+   （接続文字列を教えてもらえればカイが代わりに実行できます。ファイルには保存しません）
+4. 🧑 本ドキュメント下部の staging seed SQL（superadminアカウント）を SQL Editor で実行
+5. 🧑 Vercel → Settings → Environment Variables で、**Preview用**の3変数を新プロジェクトの値に更新
+   - `NEXT_PUBLIC_SUPABASE_URL` = 新プロジェクトの `https://<ref>.supabase.co`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = 新プロジェクトの anon key
+   - `SUPABASE_SERVICE_ROLE_KEY` = 新プロジェクトの service_role key
    - ※ クォート/スペース禁止・特定ブランチ限定を外す
-2. 🧑 Vercel → Deployments → `staging` の最新Preview → **Redeploy**（環境変数は新ビルドのみ反映）
-3. 🧑 Preview URL の `/api/health` で `project` が `xkrwwrittprbpxlvucuu`・`db: up` を確認
-4. 🧑 `/superadmin` にログイン：`staging@rakuraku.local` / `test2026`（seedは投入済み）
-5. 🧑 もしログイン画面(Vercel認証)で入れない → Settings → Deployment Protection → Vercel Authentication を Off
+6. 🧑 Vercel → Deployments → `staging` の最新Preview → **Redeploy**（環境変数は新ビルドのみ反映）
+7. 🧑 Preview URL の `/api/health` で `project` が新プロジェクトのref・`db: up` を確認
+8. 🧑 `/superadmin` にログイン：`staging@rakuraku.local` / `test2026`
+9. 🧑 もしログイン画面(Vercel認証)で入れない → Settings → Deployment Protection → Vercel Authentication を Off
 - 参考：seedのSQL・接続情報は本ドキュメント下部と `db/staging-bootstrap.sql`
 
 ## B. 死活監視の仕上げ — ✅ 完了済み（2026-09-09）
