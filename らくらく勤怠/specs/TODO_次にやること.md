@@ -6,9 +6,21 @@
 
 ---
 
-## A. ステージング環境の完成（保留中・後日）
+## 🚨 最優先（2026-09-09発見）：本番のバックアップが無い
+Supabase本番プロジェクトが**Free Plan**のため、自動バックアップが一切無い状態と判明
+（`Database → Backups`に「Free Plan does not include project backups.」と表示）。
+今、本番で事故が起きても復元できない。詳細・対応の選択肢は
+`specs/運用手順書_RUNBOOK.md` 2章参照。
+- 🧑 Pro Planへのアップグレード（有料）をするか判断する
+- 🧑（アップグレードしない場合）せめて`pg_dump`での手動バックアップを定期的に取る運用を始める
+
+## A. ステージング環境の完成（保留中・後日・要作り直し）
+以前作成していたSupabaseプロジェクト（`xkrwwrittprbpxlvucuu`）が**アカウント上から
+無くなっていることを2026-09-09に確認**（無料プランの一時停止・自動削除等が原因と推測）。
+下記手順はこのプロジェクトの存在を前提にしているため、**再開する場合は新規プロジェクト作成から**。
+
 Preview環境変数が staging に届いていない（`/api/health` が `project: unknown`）状態で中断。
-再開時の手順：
+（旧）再開時の手順の参考：
 1. 🧑 Vercel → Settings → Environment Variables で、**Preview用**の3変数が staging の値になっているか確認・修正
    - `NEXT_PUBLIC_SUPABASE_URL` = `https://xkrwwrittprbpxlvucuu.supabase.co`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = staging の anon key
