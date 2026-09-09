@@ -37,14 +37,13 @@ Preview環境変数が staging に届いていない（`/api/health` が `projec
 5. 🧑 もしログイン画面(Vercel認証)で入れない → Settings → Deployment Protection → Vercel Authentication を Off
 - 参考：seedのSQL・接続情報は本ドキュメント下部と `db/staging-bootstrap.sql`
 
-## B. 死活監視の仕上げ（Aで一部完了済み）
-> **`specs/死活監視・アラート設定手順書.md` に画面操作つきの手順をまとめました。まずそれを開いてください。**
-> Sentry・GitHub Actions（Health Check）による監視の**仕組み自体はコードに実装済み**。
-> 残っているのは画面設定（通知ON）と動作確認のみ。UptimeRobot登録は不要（Health Checkが代替）。
-- 🧑 SentryのDSN（`SENTRY_DSN`・`NEXT_PUBLIC_SENTRY_DSN`）がVercelに登録されているか確認
-- 🧑 Sentry のアラートルール（新規Issue／急増）をメール通知ON
-- 🧑 Vercel の Deployment Failed 通知をON
-- 🧑 GitHubの通知設定でActionsの失敗通知が有効か確認
+## B. 死活監視の仕上げ — ✅ 完了済み（2026-09-09）
+`specs/死活監視・アラート設定手順書.md` の手順に沿って全項目完了。
+- 🧑 SentryのDSN（`SENTRY_DSN`・`NEXT_PUBLIC_SENTRY_DSN`）がVercelに登録済みを確認
+- 🧑 Sentry のアラートルール（新規Issue発生時）をメール通知ON、テストエラーで到達確認済み
+- 🧑 Vercel の Deployment Failed 通知ON（元々有効だった）
+- 🧑 GitHubの通知設定でActionsの失敗通知（Email・失敗時のみ）が有効なことを確認
+- 🧑 `Health Check`ワークフローを手動実行し、成功（緑）を確認
 
 ## C. 販売前セキュリティ対応 — ✅ 完了済み
 STEP0（LINEログイン強制バグ修正）・STEP1（運営者パスワード変更＋2FA）・STEP2（RLS強化
