@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { decryptPhone } from "@/lib/crypto";
 import { jstToday, jstDayBounds } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     });
 
     const { start, end } = jstDayBounds(date);
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(companyId);
     const [{ data: attendance }, { data: conditions }, { data: profiles }] = await Promise.all([
       supabase
         .from("attendance")

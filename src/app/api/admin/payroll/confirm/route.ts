@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { jstMonthBounds, jstThisMonth } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { aggregatePayroll } from "@/lib/payroll/aggregate";
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const month = /^\d{4}-\d{2}$/.test(url.searchParams.get("month") ?? "")
       ? url.searchParams.get("month")!
       : jstThisMonth();
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { data, error } = await supabase
       .from("timesheets")
       .select("user_id, status, confirmed_at")
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       ? (body as { month: string }).month
       : jstThisMonth();
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { settings } = await loadFullSettings(supabase, ctx.companyId);
 
     const { start, end } = jstMonthBounds(month);

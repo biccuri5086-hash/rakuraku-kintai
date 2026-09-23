@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { jstToday } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 
@@ -10,7 +10,7 @@ export async function GET() {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const today = jstToday();
 
     const [{ count: clientsCount }, { count: activeAssignments }, { data: shifts }, { data: assignments }, { data: profiles }, { data: clients }] =

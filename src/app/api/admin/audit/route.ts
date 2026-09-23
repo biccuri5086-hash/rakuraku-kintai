@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
 
 export async function GET(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const limitParam = new URL(req.url).searchParams.get("limit") ?? "100";
     const limit = Math.min(Math.max(parseInt(limitParam, 10) || 100, 1), 500);
 
-    const { data, error } = await getSupabaseAdmin()
+    const { data, error } = await getScopedSupabaseClient(companyId)
       .from("admin_audit_log")
       .select("id, action, details, ip_address, user_agent, actor_type, created_at")
       .eq("company_id", companyId)

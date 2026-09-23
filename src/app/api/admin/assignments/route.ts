@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
 
 // 契約（アサイン）一覧：派遣先名・スタッフ名を解決して返す
@@ -9,7 +9,7 @@ export async function GET() {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const [{ data: assignments, error }, { data: clients }, { data: profiles }] = await Promise.all([
       supabase
         .from("assignments")
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const rawRate = String(body?.hourly_rate ?? "").trim();
     const hourly_rate = rawRate && /^\d+$/.test(rawRate) ? Number(rawRate) : null;
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { data, error } = await supabase
       .from("assignments")
       .insert({
@@ -103,7 +103,7 @@ export async function PATCH(req: NextRequest) {
     const job_content = String(body?.job_content ?? "").trim() || null;
     const rawRate = String(body?.hourly_rate ?? "").trim();
     const hourly_rate = rawRate && /^\d+$/.test(rawRate) ? Number(rawRate) : null;
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from("assignments").update({
       user_id, client_id, type, start_date, end_date, job_content, hourly_rate,
     }).eq("id", id).eq("company_id", ctx.companyId);
@@ -121,7 +121,7 @@ export async function DELETE(req: NextRequest) {
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
     const id = new URL(req.url).searchParams.get("id");
     if (!id) return NextResponse.json({ ok: false, message: "idが必要です" }, { status: 400 });
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from("assignments").delete().eq("id", id).eq("company_id", ctx.companyId);
     if (error) throw error;
     return NextResponse.json({ ok: true });

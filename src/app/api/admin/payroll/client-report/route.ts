@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { jstMonthBounds, jstThisMonth } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { aggregateClientReport } from "@/lib/payroll/clientReport";
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const onlyClient = url.searchParams.get("client_id"); // CSVを特定派遣先だけに絞る用
 
     const { start, end } = jstMonthBounds(month);
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const [{ data: punches, error }, { data: assignments }, { data: clients }] = await Promise.all([
       supabase
         .from("attendance")

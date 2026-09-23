@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { jstToday } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { computeComplianceAlerts } from "@/lib/compliance/alerts";
@@ -16,7 +16,7 @@ export async function GET() {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const [{ data: clients, error }, { data: assignments }, { data: staff }] = await Promise.all([
       supabase.from("clients").select("*").eq("company_id", ctx.companyId),
       supabase.from("assignments").select("*").eq("company_id", ctx.companyId),

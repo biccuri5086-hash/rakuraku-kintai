@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { jstToday } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { activeGrantedDays, takenDays, remainingDays, nextExpiry as nextExpiryOf } from "@/lib/paid-leave/balance";
@@ -15,7 +15,7 @@ export async function GET() {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const today = jstToday();
 
     const [grantsRes, takingsRes, profilesRes] = await Promise.all([
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     const user_id = String(body?.user_id ?? "").trim();
     if (!user_id) return NextResponse.json({ ok: false, message: "スタッフを選択してください" }, { status: 400 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
 
     if (action === "grant") {
       const granted_days = Number(body?.granted_days);
@@ -127,7 +127,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "type と id を指定してください" }, { status: 400 });
     }
     const table = type === "grant" ? "paid_leave_grants" : "paid_leave_takings";
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from(table).delete().eq("id", id).eq("company_id", ctx.companyId);
     if (error) throw error;
     return NextResponse.json({ ok: true });

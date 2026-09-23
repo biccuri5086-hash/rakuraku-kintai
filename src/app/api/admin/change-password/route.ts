@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { verifyPassword, hashPassword } from "@/lib/password";
 import { checkPassword } from "@/lib/password-policy";
 import { logAudit } from "@/lib/audit-log";
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "現在と違うパスワードにしてください" }, { status: 400 });
     }
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { data: admin } = await supabase
       .from("admins")
       .select("id, password_hash")
