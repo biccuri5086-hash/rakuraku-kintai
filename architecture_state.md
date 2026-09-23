@@ -14,7 +14,7 @@
 | 領域 | 技術 | 備考 |
 |---|---|---|
 | フロントエンド/バックエンド | Next.js 16（App Router）／React 19／TypeScript | `src/app/api/**` がAPIルート、`src/app/**` が画面 |
-| DB・認証基盤 | Supabase（Postgres） | アクセスは全て`service_role`経由。RLSは有効・ポリシー0件（anon/authenticatedは何も読めない） |
+| DB・認証基盤 | Supabase（Postgres） | 大半は`service_role`経由(RLSは有効・anon/authenticated向けポリシー0件)。`src/app/api/admin/clients/route.ts`のみ、company_idクレーム付きJWT+`app_tenant`ロールのRLSで二重防御化済み(下記参照、本番未検証)。 |
 | ホスティング | Vercel | mainブランチが自動デプロイ |
 | エラー監視 | `@sentry/nextjs` (^10.54.0) | 後述4章 |
 | スタッフ認証 | `@line/liff` | LINE LIFFでの打刻画面のみ使用（`/` `/register` `/condition`） |
@@ -48,6 +48,17 @@ scripts/            # selftest群(npm testで実行)・migrate.mjs・dogfood_tes
 `src/lib/tenant-context.ts`の`requireTenantContext()`が唯一の`company_id`導出経路。
 `scripts/tenant_isolation_test.ts`が`src/app/api/admin/**`を静的検査し、リクエスト由来の
 `company_id`を使っているコードがあれば`npm test`が落ちる。
+
+## 2.5 RLS限定カギ方式（着手中・全ルート未移行）
+
+「アプリのコードがcompany_idフィルタを書き忘れても、DB側(RLS)が物理的に
+他社データへのアクセスをブロックする」多層防御。設計・現在の適用範囲・
+本番投入前に必須の確認事項は`らくらく勤怠/specs/RLS_限定カギ方式_設計.md`参照。
+**新しくRLSやマルチテナントのDBアクセス方式を「作って」と言われたら、まずこれを見る。**
+現状: `db/migrations/0008_scoped_tenant_role.sql`でapp_tenantロール+RLS作成済み、
+`src/lib/tenant-jwt.ts`・`src/lib/supabase-tenant.ts`で発行、
+`src/app/api/admin/clients/route.ts`のみ適用済み。他22ルートは`service_role`のまま。
+**本番Supabaseでの動作確認は未実施**(このセッションに本番接続情報が無いため)。
 
 ## 3. データベース構成
 
