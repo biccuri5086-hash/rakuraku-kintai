@@ -112,3 +112,42 @@ pooling下での`SET LOCAL`運用の実装難度、既存のPostgREST
 2. `admins` / `companies`へのRLS拡張を検討（company_idの持ち方が他と違うため別設計が必要）
 3. `company_subscription`のDELETE権限が本当に必要か確認し、不要なら剥奪
 4. `clients`以外の22ルートを`getScopedSupabaseClient`へ段階移行
+
+## マスターキー(service_role)漏洩・乗っ取り対策
+
+限定カギ方式(RLS)は「日常業務のバグ」への保険であり、「service_roleキーそのものが
+漏れる」「サーバーが乗っ取られる」ケースは別の対策が要る、とオーナーに説明済み。
+そのうち以下を実施した／実施が必要。
+
+### 実施済み：異常検知バッチ（気づくまでの時間を短くする対策）
+
+正規の管理者セッションは1つのcompany_idに固定される。よって`admin_audit_log`上で
+「同じadmin(actor_id)が短時間に複数のcompany_idにまたがって操作している」状態は、
+通常あり得ない。これが起きていたら、service_role漏洩か、セッション/company_id発行
+ロジックのバグを疑う。
+
+- `src/lib/anomaly-detection.ts`：検知の純粋関数（`scripts/anomaly_detection_selftest.ts`で
+  テスト済み、`npm test`に登録済み）
+- `src/app/api/internal/anomaly-check/route.ts`：`admin_audit_log`を直近70分ぶん確認し、
+  異常があればSentryに通知。`INTERNAL_CRON_SECRET`で保護（未設定/不一致なら401、
+  フェイルクローズ確認済み）
+- `.github/workflows/anomaly-check.yml`：1時間ごとに上記を叩く（`health-check.yml`と
+  同じ形）。異常時はジョブを失敗させ、GitHubの自動メール通知に乗せる
+
+**オーナーが行うこと**：GitHub リポジトリの Settings → Secrets and variables →
+Actions に `INTERNAL_CRON_SECRET`（32文字以上のランダム値）を追加し、同じ値を
+Vercelの環境変数にも `INTERNAL_CRON_SECRET` として追加する。
+
+### 未実施：接続元IP制限（侵入・漏洩そのものへの対策として費用対効果が最も高い）
+
+Supabaseダッシュボード → Project Settings → Database → Network Restrictions で、
+Vercelが使うIP範囲以外からの接続を拒否できる。**これはSupabaseプロジェクト側の設定で、
+コードからは実施できないため、オーナーが直接ダッシュボードで設定する必要がある。**
+service_roleキーが万一漏れても、許可されたIP範囲外からは使えなくなる。
+
+### 未実施：鍵ローテーション訓練
+
+`RUNBOOK`6章に手順はあるが、実際に訓練していない（`architecture_state.md`6章に
+既に記載の通り、リストア手順も同様に未訓練。安全な訓練環境が要る、という同じ課題）。
+次のメンテナンスウィンドウで一度実際にservice_roleキーをローテーションしてみることを
+推奨する。

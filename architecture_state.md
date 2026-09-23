@@ -90,6 +90,7 @@ scripts/            # selftest群(npm testで実行)・migrate.mjs・dogfood_tes
 | サーバー起動時エラー | `instrumentation.ts`（Next.jsの`onRequestError`） | ✅ 実装済み |
 | 外形監視（死活監視） | `.github/workflows/health-check.yml`。10分ごとに`/api/health`を叩き、失敗でGitHubがメール通知 | ✅ 実装済み。**UptimeRobot等は不要**（これが代替） |
 | 監査ログ | `src/lib/audit-log.ts`の`logAudit()`。IPアドレス・UA・操作種別を`admin_audit_log`に記録 | ✅ 実装済み |
+| マスターキー(service_role)漏洩の異常検知 | `.github/workflows/anomaly-check.yml`が1時間ごとに`/api/internal/anomaly-check`を叩く。`admin_audit_log`上で「同一adminが複数company_idにまたがって操作」を検知しSentry通知+ジョブ失敗→メール通知 | ✅ 実装済み(2026-09-23)。要`INTERNAL_CRON_SECRET`(GitHub Secrets + Vercel環境変数の両方)。詳細は`らくらく勤怠/specs/RLS_限定カギ方式_設計.md`参照。**新しく「service_role漏洩の検知」を作ってと言われたら、まずこれを見る** |
 | アラート設定の仕上げ手順 | `specs/死活監視・アラート設定手順書.md` | 手順書あり。画面設定（Sentry ON等）は運営者の実操作待ち |
 
 **新しくエラー通知や死活監視を「作って」と言われたら、まずこの表を見て、

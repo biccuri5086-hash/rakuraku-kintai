@@ -1,0 +1,54 @@
+name: Anomaly Check
+
+# マスターキー(service_role)漏洩・悪用の早期検知。
+# /api/internal/anomaly-check を定期的に叩き、「同じ管理者が複数会社にまたがって
+# 操作している」という、通常のログインフローでは起こり得ないパターンを検知する。
+# 見つかった場合はSentryにも通知しつつ、このジョブ自体も失敗させてGitHubのメール通知に乗せる。
+#
+# 必要なSecret: Settings → Secrets and variables → Actions →
+#   INTERNAL_CRON_SECRET (このルート専用の共有シークレット。SESSION_SECRET等とは別物)
+#
+# 実行タイミング:
+#  1) 1時間ごと（自動）
+#  2) 手動（Actions タブ → Anomaly Check → Run workflow）
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: anomaly-check
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: /api/internal/anomaly-check を確認
+        env:
+          URL: ${{ vars.ANOMALY_CHECK_URL || 'https://rakuraku-kintai.vercel.app/api/internal/anomaly-check' }}
+          SECRET: ${{ secrets.INTERNAL_CRON_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "::error::INTERNAL_CRON_SECRET が未設定です。Settings → Secrets and variables → Actions で設定してください。"
+            exit 1
+          fi
+
+          body="$(curl -sS --max-time 20 -H "Authorization: Bearer $SECRET" -w $'\n%{http_code}' "$URL" || true)"
+          code="$(printf '%s' "$body" | tail -n1)"
+          payload="$(printf '%s' "$body" | sed '$d')"
+          echo "応答: HTTP $code / $payload"
+
+          if [ "$code" != "200" ]; then
+            echo "::error::異常検知チェック自体が失敗しました(HTTP $code)。$URL / 認証設定を確認してください。"
+            exit 1
+          fi
+
+          anomaly_count="$(printf '%s' "$payload" | grep -o '"actorId"' | wc -l | tr -d ' ')"
+          if [ "$anomaly_count" != "0" ]; then
+            echo "::error::異常を検知しました。同一管理者が複数会社にまたがって操作しています。service_role漏洩の疑いがあります。至急RUNBOOK 6章(秘密鍵ローテーション)を確認してください。応答: $payload"
+            exit 1
+          fi
+
+          echo "::notice::異常なし"

@@ -2,7 +2,10 @@
 // 弱いSESSION_SECRETの取りこぼしは全社データ削除に直結するため、ここが要。
 import {
   checkSessionSecret,
+  checkSupabaseJwtSecret,
+  checkInternalCronSecret,
   confirmationMatches,
+  timingSafeTokenEquals,
   MIN_SECRET_LENGTH,
   RECOMMENDED_SECRET_LENGTH,
 } from "../src/lib/security-guard";
@@ -48,6 +51,23 @@ const good = (s: string | undefined | null) => checkSessionSecret(s).ok;
   ok("expected が空なら常に false", !confirmationMatches("", "アルファ人材"));
   ok("非文字列は false", !confirmationMatches("アルファ人材", 123 as unknown));
   ok("null は false", !confirmationMatches("アルファ人材", null));
+}
+
+// --- SUPABASE_JWT_SECRET / INTERNAL_CRON_SECRET も同じ強度基準(SESSION_SECRETとは別鍵) ---
+{
+  const strong = "Zx9Kq2Lp7Vt4Rw8Nb1Mc6Yf3Hg5Ds0Aj";
+  ok("SUPABASE_JWT_SECRETも強い鍵は許可", checkSupabaseJwtSecret(strong).ok);
+  ok("SUPABASE_JWT_SECRET未設定は拒否", !checkSupabaseJwtSecret(undefined).ok);
+  ok("INTERNAL_CRON_SECRETも強い鍵は許可", checkInternalCronSecret(strong).ok);
+  ok("INTERNAL_CRON_SECRET未設定は拒否", !checkInternalCronSecret(undefined).ok);
+}
+
+// --- タイミングセーフなトークン比較 ---
+{
+  ok("同じ値は一致", timingSafeTokenEquals("abc123", "abc123"));
+  ok("違う値は不一致", !timingSafeTokenEquals("abc123", "abc124"));
+  ok("長さが違っても例外にならず不一致", !timingSafeTokenEquals("abc", "abcdef"));
+  ok("空文字同士は一致", timingSafeTokenEquals("", ""));
 }
 
 if (failed > 0) { console.log(`\n${failed} test(s) failed`); process.exit(1); }

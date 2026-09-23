@@ -1,5 +1,6 @@
 // セキュリティ上の「フェイルセーフ」判定を集めた純粋関数群。
 // 画面・API・スクリプトから同じ判定を使い、scripts/security_guard_selftest.ts でテストする。
+import crypto from "node:crypto";
 
 // ── SESSION_SECRET の強度検査 ───────────────────────────────
 // 署名Cookie(rk_tenant_session / rk_super_session / me_session)は
@@ -69,6 +70,11 @@ export function checkSupabaseJwtSecret(secret: string | undefined | null): Secre
   return checkSecretStrength(secret, "SUPABASE_JWT_SECRET");
 }
 
+// 内部の定期バッチ(GitHub Actionsからの異常検知チェック等)を叩くための共有シークレット。
+export function checkInternalCronSecret(secret: string | undefined | null): SecretVerdict {
+  return checkSecretStrength(secret, "INTERNAL_CRON_SECRET");
+}
+
 let _warned = false;
 // 実行時に SESSION_SECRET を取り出す共通入口。弱ければ throw（フェイルクローズ）。
 export function requireSessionSecret(secret: string | undefined | null): string {
@@ -90,6 +96,25 @@ export function requireSupabaseJwtSecret(secret: string | undefined | null): str
     console.warn(`[security] ${verdict.warning}`);
   }
   return secret as string;
+}
+
+let _cronWarned = false;
+export function requireInternalCronSecret(secret: string | undefined | null): string {
+  const verdict = checkInternalCronSecret(secret);
+  if (!verdict.ok) throw new Error(verdict.reason);
+  if (verdict.warning && !_cronWarned) {
+    _cronWarned = true;
+    console.warn(`[security] ${verdict.warning}`);
+  }
+  return secret as string;
+}
+
+// タイミングセーフなBearerトークン比較(長さの違いも一定時間で判定する)。
+export function timingSafeTokenEquals(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
 // ── 破壊的操作の確認一致 ─────────────────────────────────────
