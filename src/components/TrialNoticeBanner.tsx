@@ -53,15 +53,18 @@ export default function TrialNoticeBanner() {
             {expired ? "無料トライアルは終了しました" : `無料トライアルはあと${notice.daysLeft}日で終了します`}
           </p>
           <p className="text-xs text-amber-800 mt-0.5">
-            終了日：{end}。{expired ? "" : "このまま使い続けるか、ここでやめるかを選んでください。"}
+            終了日：{end}。{expired
+              ? `あと${notice.graceDaysLeft}日以内に有料プランを選ばないと、自動的に利用停止になります。`
+              : "このまま使い続けるか、ここでやめるかを選んでください。"}
             無料プランはありません。続ける場合は有料プランをお選びください。
+            {!expired && "終了後も7日間の猶予があります。"}
           </p>
         </div>
       </div>
 
       {notice.decision === "stop" ? (
         <div className="bg-white rounded-xl border border-amber-200 p-3 text-xs text-gray-700 space-y-2">
-          <p className="font-bold">「やめる」を選択済みです。{expired ? "利用を停止しました。" : `${end}の終了とともに利用停止になります。`}</p>
+          <p className="font-bold">「やめる」を選択済みです。{expired ? "まもなく利用停止になります。" : `${end}の終了とともに利用停止になります。`}</p>
           <p>データは停止から30日間保管され、その後削除されます。気が変わった場合は下のボタンから続けられます。</p>
           <button onClick={() => decide("continue")} disabled={saving}
             className="bg-[#06C755] text-white font-bold text-sm px-4 py-2 rounded-lg disabled:opacity-60">

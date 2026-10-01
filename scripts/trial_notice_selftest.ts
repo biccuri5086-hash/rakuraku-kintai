@@ -1,4 +1,4 @@
-import { trialNotice, isTrialStopped } from "../src/lib/billing/trial-notice";
+import { trialNotice, isTrialLapsed, GRACE_DAYS } from "../src/lib/billing/trial-notice";
 
 let failed = 0;
 function eq(name: string, got: unknown, want: unknown) {
@@ -22,11 +22,16 @@ eq("不正な日付は出さない", trialNotice("trial", "xx", null, false, now
 eq("選択済みを返す", trialNotice("trial", inDays(3), "stop", false, now).decision, "stop");
 eq("不正な選択は無視", trialNotice("trial", inDays(3), "zzz", false, now).decision, null);
 
-eq("stop+期限後は停止", isTrialStopped("trial", inDays(-1), "stop", now), true);
-eq("stop+期限前は停止しない", isTrialStopped("trial", inDays(1), "stop", now), false);
-eq("continueは停止しない", isTrialStopped("trial", inDays(-1), "continue", now), false);
-eq("未選択は停止しない", isTrialStopped("trial", inDays(-1), null, now), false);
-eq("active会社は停止しない", isTrialStopped("active", inDays(-1), "stop", now), false);
+eq("猶予日数", GRACE_DAYS, 7);
+eq("期限切れの猶予残り(切り上げ)", trialNotice("trial", inDays(-2), null, false, now).graceDaysLeft, 5);
+eq("stop+期限後は停止", isTrialLapsed("trial", inDays(-1), "stop", false, now), true);
+eq("stop+期限前は停止しない", isTrialLapsed("trial", inDays(1), "stop", false, now), false);
+eq("未選択は猶予中は止めない", isTrialLapsed("trial", inDays(-3), null, false, now), false);
+eq("未選択は猶予後に停止", isTrialLapsed("trial", inDays(-7), null, false, now), true);
+eq("continueも猶予後に停止", isTrialLapsed("trial", inDays(-8), "continue", false, now), true);
+eq("契約済みは止めない", isTrialLapsed("trial", inDays(-30), "stop", true, now), false);
+eq("active会社は止めない", isTrialLapsed("active", inDays(-30), null, false, now), false);
+eq("終了日なしは止めない", isTrialLapsed("trial", null, null, false, now), false);
 
 console.log(failed === 0 ? "\nALL PASS" : `\n${failed} FAILED`);
 if (failed) process.exit(1);

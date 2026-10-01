@@ -8,6 +8,7 @@ import { verifyTOTP } from "@/lib/totp";
 import { checkPassword } from "@/lib/password-policy";
 import { TRUST_COOKIE, TRUSTED_DEVICE_MAX_AGE, credentialFingerprint, isTrustedDevice, signTrustToken } from "@/lib/trusted-device";
 import { logAudit } from "@/lib/audit-log";
+import { companyBlockReason } from "@/lib/tenant-context";
 import { errorResponse } from "@/lib/api-handler";
 
 function clientKey(req: NextRequest): string {
@@ -101,16 +102,17 @@ export async function POST(req: NextRequest) {
       admin = usable[0];
     }
 
-    const { data: company } = await supabase
-      .from("companies")
-      .select("status")
-      .eq("id", admin.company_id)
-      .maybeSingle();
-    if (!company || company.status === "suspended" || company.status === "cancelled") {
-      await logAudit(req, "admin_login_failure", { email, reason: "company_disabled" }, {
+    const blockReason = await companyBlockReason(admin.company_id);
+    if (blockReason) {
+      await logAudit(req, "admin_login_failure", { email, reason: blockReason === "trial_ended" ? "trial_ended" : "company_disabled" }, {
         actorType: "admin", actorId: admin.id, companyId: admin.company_id,
       });
-      return NextResponse.json({ ok: false, message: "この会社のサービスは現在ご利用いただけません" }, { status: 403 });
+      return NextResponse.json({
+        ok: false,
+        message: blockReason === "trial_ended"
+          ? "無料トライアルが終了したため停止中です。ご継続は運営までご連絡ください。"
+          : "この会社のサービスは現在ご利用いただけません",
+      }, { status: 403 });
     }
 
     // 一度6桁を通したブラウザは7日間だけ省略できる。

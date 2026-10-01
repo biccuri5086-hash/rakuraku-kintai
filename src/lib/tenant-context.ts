@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { isTrialStopped } from "./billing/trial-notice";
+import { isTrialLapsed } from "./billing/trial-notice";
 import {
   TENANT_SESSION_COOKIE,
   SUPER_SESSION_COOKIE,
@@ -23,16 +23,29 @@ export type SuperContext = {
 // 解約(cancelled)・停止(suspended)された会社は、署名済みセッションが残っていても
 // 即座に締め出す。セッションは最長7日間有効なため、ここでDB側のstatusを都度確認しないと
 // 解約後も期限まで管理画面が使えてしまう(テナント削除自動化_設計.md 参照)。
-export async function isCompanyBlocked(companyId: string): Promise<boolean> {
-  const { data } = await getSupabaseAdmin()
+export type BlockReason = "disabled" | "trial_ended";
+
+export async function companyBlockReason(companyId: string): Promise<BlockReason | null> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
     .from("companies")
     .select("*") // trial_decision 列は後から追加された(0010)ため、未適用でも落ちないよう * で読む
     .eq("id", companyId)
     .maybeSingle();
-  if (!data) return true;
-  if (data.status === "cancelled" || data.status === "suspended") return true;
-  // トライアル終了時に「やめる」を選んだ会社は、終了日を過ぎたら締め出す
-  return isTrialStopped(data.status, data.trial_ends_at, data.trial_decision);
+  if (!data) return "disabled";
+  if (data.status === "cancelled" || data.status === "suspended") return "disabled";
+  // トライアル終了後の自動停止(猶予あり)。期限を過ぎた会社のときだけ契約状況を引く。
+  if (isTrialLapsed(data.status, data.trial_ends_at, data.trial_decision, false)) {
+    const { data: sub } = await supabase
+      .from("company_subscription").select("status").eq("company_id", companyId).maybeSingle();
+    if (!isTrialLapsed(data.status, data.trial_ends_at, data.trial_decision, sub?.status === "active")) return null;
+    return "trial_ended";
+  }
+  return null;
+}
+
+export async function isCompanyBlocked(companyId: string): Promise<boolean> {
+  return (await companyBlockReason(companyId)) !== null;
 }
 
 export async function getTenantContext(): Promise<TenantContext | null> {
