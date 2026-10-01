@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "./supabase-admin";
+import { isTrialStopped } from "./billing/trial-notice";
 import {
   TENANT_SESSION_COOKIE,
   SUPER_SESSION_COOKIE,
@@ -25,10 +26,13 @@ export type SuperContext = {
 export async function isCompanyBlocked(companyId: string): Promise<boolean> {
   const { data } = await getSupabaseAdmin()
     .from("companies")
-    .select("status")
+    .select("*") // trial_decision 列は後から追加された(0010)ため、未適用でも落ちないよう * で読む
     .eq("id", companyId)
     .maybeSingle();
-  return !data || data.status === "cancelled" || data.status === "suspended";
+  if (!data) return true;
+  if (data.status === "cancelled" || data.status === "suspended") return true;
+  // トライアル終了時に「やめる」を選んだ会社は、終了日を過ぎたら締め出す
+  return isTrialStopped(data.status, data.trial_ends_at, data.trial_decision);
 }
 
 export async function getTenantContext(): Promise<TenantContext | null> {

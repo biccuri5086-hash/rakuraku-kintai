@@ -23,6 +23,7 @@ export type AuditAction =
   | "super_company_create"
   | "super_company_update"
   | "super_company_cancel"
+  | "admin_trial_decision"
   | "system_company_purge"
   | "system_company_purge_failed"
   | "super_admin_create"

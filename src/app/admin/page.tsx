@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Users, Clock, AlertCircle, LogOut, Shield, Building2, FileText, CalendarClock, LockKeyhole, ShieldCheck } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
+import TrialNoticeBanner from "@/components/TrialNoticeBanner";
 
 type TodayShift = { id: string; start_time: string | null; end_time: string | null; staff_name: string; client_name: string };
 type Overview = { clientsCount: number; activeAssignments: number; todayShifts: TodayShift[] };
@@ -192,6 +193,7 @@ export default function AdminPage() {
       <AdminNav />
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+        <TrialNoticeBanner />
         <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
           <label className="text-sm font-semibold text-gray-500">表示日付</label>
           <input

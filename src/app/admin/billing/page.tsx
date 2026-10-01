@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, LogOut, Check, Users, Info } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
+import TrialNoticeBanner from "@/components/TrialNoticeBanner";
 
 type PlanId = "trial" | "free" | "starter" | "standard" | "enterprise";
 type PlanView = {
@@ -88,6 +89,7 @@ export default function BillingPage() {
       <AdminNav />
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+        <TrialNoticeBanner />
         <h2 className="font-bold text-gray-700 flex items-center gap-2">
           <CreditCard size={18} className="text-[#06C755]" /> 現在のプラン
         </h2>
