@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
 import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
-import { PLANS, DEFAULT_SUBSCRIPTION, rowToSubscription, estimateMonthly, isPlanId, statusForPlan } from "@/lib/billing/plans";
+import { PLANS, DEFAULT_SUBSCRIPTION, rowToSubscription, estimateMonthly, isSelectablePlan, statusForPlan } from "@/lib/billing/plans";
 
 // Phase D: 課金（プラン管理）。
 // GET: 現在の契約プラン（company_subscription 未適用なら トライアル既定）＋登録スタッフ数＋概算。適用前でも動く。
@@ -53,7 +53,7 @@ export async function PUT(req: NextRequest) {
     if (!ctx) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!isPlanId(body.plan)) return NextResponse.json({ ok: false, message: "plan 不正" }, { status: 400 });
+    if (!isSelectablePlan(body.plan)) return NextResponse.json({ ok: false, message: "選択できないプランです" }, { status: 400 });
     const plan = body.plan;
 
     const supabase = getScopedSupabaseClient(ctx.companyId);
