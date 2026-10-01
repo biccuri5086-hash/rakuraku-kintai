@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
 import { PLANS, DEFAULT_SUBSCRIPTION, rowToSubscription, estimateMonthly, isPlanId, statusForPlan } from "@/lib/billing/plans";
 
@@ -13,7 +13,7 @@ export async function GET() {
   try {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
 
     let subscription = DEFAULT_SUBSCRIPTION;
     let source: "db" | "default" = "default";
@@ -56,7 +56,7 @@ export async function PUT(req: NextRequest) {
     if (!isPlanId(body.plan)) return NextResponse.json({ ok: false, message: "plan 不正" }, { status: 400 });
     const plan = body.plan;
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase
       .from("company_subscription")
       .upsert({ company_id: ctx.companyId, plan, status: statusForPlan(plan) }, { onConflict: "company_id" });

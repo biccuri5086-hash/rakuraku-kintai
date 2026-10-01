@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
 import { loadFullSettings, validateFull, fullToRow } from "@/lib/payroll/companySettings";
 
@@ -13,7 +13,7 @@ export async function GET() {
   try {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false, message: "未認証" }, { status: 401 });
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { settings, source } = await loadFullSettings(supabase, ctx.companyId);
     return NextResponse.json({ ok: true, settings, source });
   } catch (e) {
@@ -30,7 +30,7 @@ export async function PUT(req: NextRequest) {
     const v = validateFull(body);
     if (!v.ok) return NextResponse.json({ ok: false, message: v.error }, { status: 400 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const row = fullToRow(ctx.companyId, v.value);
     const { error } = await supabase.from("company_payroll_settings").upsert(row, { onConflict: "company_id" });
     if (error) {

@@ -1,5 +1,6 @@
 // セキュリティ上の「フェイルセーフ」判定を集めた純粋関数群。
 // 画面・API・スクリプトから同じ判定を使い、scripts/security_guard_selftest.ts でテストする。
+import crypto from "node:crypto";
 
 // ── SESSION_SECRET の強度検査 ───────────────────────────────
 // 署名Cookie(rk_tenant_session / rk_super_session / me_session)は
@@ -33,28 +34,45 @@ export type SecretVerdict =
   | { ok: true; warning?: string }
   | { ok: false; reason: string };
 
-export function checkSessionSecret(secret: string | undefined | null): SecretVerdict {
-  if (!secret) return { ok: false, reason: "SESSION_SECRET is not set" };
+// label は "SESSION_SECRET" / "SUPABASE_JWT_SECRET" 等、呼び出し元の環境変数名を
+// そのままエラー文に出すための表示名。判定ロジック自体はどの鍵でも同じ強度基準を使う。
+function checkSecretStrength(secret: string | undefined | null, label: string): SecretVerdict {
+  if (!secret) return { ok: false, reason: `${label} is not set` };
   if (secret.length < MIN_SECRET_LENGTH) {
-    return { ok: false, reason: `SESSION_SECRET must be at least ${MIN_SECRET_LENGTH} characters (got ${secret.length})` };
+    return { ok: false, reason: `${label} must be at least ${MIN_SECRET_LENGTH} characters (got ${secret.length})` };
   }
   const norm = secret.trim().toLowerCase();
   if (WEAK_EXACT.has(norm)) {
-    return { ok: false, reason: "SESSION_SECRET is a known weak/default value" };
+    return { ok: false, reason: `${label} is a known weak/default value` };
   }
   for (const token of WEAK_TOKENS) {
     if (norm.includes(token)) {
-      return { ok: false, reason: `SESSION_SECRET contains a weak/default token ("${token}"); use a random 32+ char value` };
+      return { ok: false, reason: `${label} contains a weak/default token ("${token}"); use a random 32+ char value` };
     }
   }
   // 反復・単調な鍵(例: "aaaa...", "abababab...")を弾く。
   if (uniqueCharCount(secret) < 8) {
-    return { ok: false, reason: "SESSION_SECRET has too little entropy (fewer than 8 distinct characters)" };
+    return { ok: false, reason: `${label} has too little entropy (fewer than 8 distinct characters)` };
   }
   if (secret.length < RECOMMENDED_SECRET_LENGTH) {
-    return { ok: true, warning: `SESSION_SECRET is shorter than the recommended ${RECOMMENDED_SECRET_LENGTH} characters; rotate to a 32+ char random value` };
+    return { ok: true, warning: `${label} is shorter than the recommended ${RECOMMENDED_SECRET_LENGTH} characters; rotate to a 32+ char random value` };
   }
   return { ok: true };
+}
+
+export function checkSessionSecret(secret: string | undefined | null): SecretVerdict {
+  return checkSecretStrength(secret, "SESSION_SECRET");
+}
+
+// RLS用スコープ付きJWT(src/lib/tenant-jwt.ts)の署名鍵。SESSION_SECRETとは別物・使い回し禁止
+// (どちらかが漏れても、もう一方には影響しないようにするため)。
+export function checkSupabaseJwtSecret(secret: string | undefined | null): SecretVerdict {
+  return checkSecretStrength(secret, "SUPABASE_JWT_SECRET");
+}
+
+// 内部の定期バッチ(GitHub Actionsからの異常検知チェック等)を叩くための共有シークレット。
+export function checkInternalCronSecret(secret: string | undefined | null): SecretVerdict {
+  return checkSecretStrength(secret, "INTERNAL_CRON_SECRET");
 }
 
 let _warned = false;
@@ -67,6 +85,36 @@ export function requireSessionSecret(secret: string | undefined | null): string 
     console.warn(`[security] ${verdict.warning}`);
   }
   return secret as string;
+}
+
+let _jwtWarned = false;
+export function requireSupabaseJwtSecret(secret: string | undefined | null): string {
+  const verdict = checkSupabaseJwtSecret(secret);
+  if (!verdict.ok) throw new Error(verdict.reason);
+  if (verdict.warning && !_jwtWarned) {
+    _jwtWarned = true;
+    console.warn(`[security] ${verdict.warning}`);
+  }
+  return secret as string;
+}
+
+let _cronWarned = false;
+export function requireInternalCronSecret(secret: string | undefined | null): string {
+  const verdict = checkInternalCronSecret(secret);
+  if (!verdict.ok) throw new Error(verdict.reason);
+  if (verdict.warning && !_cronWarned) {
+    _cronWarned = true;
+    console.warn(`[security] ${verdict.warning}`);
+  }
+  return secret as string;
+}
+
+// タイミングセーフなBearerトークン比較(長さの違いも一定時間で判定する)。
+export function timingSafeTokenEquals(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
 // ── 破壊的操作の確認一致 ─────────────────────────────────────

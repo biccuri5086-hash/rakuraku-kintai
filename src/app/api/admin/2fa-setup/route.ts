@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import QRCode from "qrcode";
 import { generateSecret, buildOtpAuthUrl, verifyTOTP } from "@/lib/totp";
 import { verifyPassword } from "@/lib/password";
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     if (guard.error) return guard.error;
     const { adminId, companyId } = guard.ctx;
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(companyId);
     const { data: admin } = await supabase
       .from("admins")
       .select("totp_secret, email")
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "不正なリクエスト" }, { status: 400 });
     }
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(companyId);
 
     if (body.action === "disable") {
       // 無効化は本人確認を必須にする。

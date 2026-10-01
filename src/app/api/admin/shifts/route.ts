@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
 
 // シフト一覧（日付の新しい順）
@@ -9,7 +9,7 @@ export async function GET() {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { data, error } = await supabase
       .from("shifts")
       .select("id, assignment_id, work_date, start_time, end_time, break_minutes, status")
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "契約と勤務日は必須です" }, { status: 400 });
     }
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
 
     // 対象の契約が自社のものか検証（他テナントの契約にシフトを付けさせない）
     const { data: assign } = await supabase
@@ -88,7 +88,7 @@ export async function PATCH(req: NextRequest) {
     const t = (v: unknown) => { const s = String(v ?? "").trim(); return /^\d{2}:\d{2}$/.test(s) ? s : null; };
     const rawBreak = String(body?.break_minutes ?? "").trim();
     const break_minutes = rawBreak && /^\d+$/.test(rawBreak) ? Number(rawBreak) : 0;
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from("shifts").update({
       work_date, start_time: t(body?.start_time), end_time: t(body?.end_time), break_minutes,
     }).eq("id", id).eq("company_id", ctx.companyId);
@@ -106,7 +106,7 @@ export async function DELETE(req: NextRequest) {
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
     const id = new URL(req.url).searchParams.get("id");
     if (!id) return NextResponse.json({ ok: false, message: "idが必要です" }, { status: 400 });
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from("shifts").delete().eq("id", id).eq("company_id", ctx.companyId);
     if (error) throw error;
     return NextResponse.json({ ok: true });

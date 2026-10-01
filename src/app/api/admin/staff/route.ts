@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
 
 // スタッフ一覧（契約フォームの選択肢・管理台帳の属性編集などに使う軽量エンドポイント）
@@ -9,7 +9,7 @@ export async function GET() {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { data, error } = await supabase
       .from("user_profiles")
       .select("user_id, display_name, full_name, employment_type, social_insurance")
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest) {
     const social_insurance =
       si === "enrolled" || si === "not_enrolled" || si === "exempt" ? si : null;
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase
       .from("user_profiles")
       .update({ employment_type, social_insurance })

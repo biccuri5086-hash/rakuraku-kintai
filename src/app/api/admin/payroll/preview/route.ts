@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { jstMonthBounds, jstThisMonth } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { aggregatePayroll } from "@/lib/payroll/aggregate";
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     const monthFirst = `${month}-01`;
     const nextFirst = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`;
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const [{ data: punches, error }, { data: assignments }, { data: shifts }] = await Promise.all([
       supabase
         .from("attendance")

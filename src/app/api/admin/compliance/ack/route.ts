@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
 
 // Phase C: 抵触日アラートの確認・対応記録。compliance_acks に保存。
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
     const str = (v: unknown) => (typeof v === "string" && v.length ? v : null);
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from("compliance_acks").insert({
       company_id: ctx.companyId,
       scope,

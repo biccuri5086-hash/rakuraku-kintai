@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
+
+// 案A(限定カギ方式)の最初の適用先。service_role(全社にアクセスできる万能キー)ではなく、
+// company_idクレーム付きの署名済みJWTでアクセスする専用ロール(app_tenant)を使う。
+// RLS(db/migrations/0008_scoped_tenant_role.sql)がcompany_idを二重に検証するため、
+// 下の .eq("company_id", ctx.companyId) を書き忘れても他社データには届かない。
+// ただし既存のアプリ層チェックは保険として残し、外さないこと。
 
 // 派遣先（clients）の一覧取得
 export async function GET() {
@@ -9,7 +15,7 @@ export async function GET() {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { data, error } = await supabase
       .from("clients")
       .select("id, name, workplace_name, address, contact_name, contact_phone, dispatch_manager, teishokubi, created_at")
@@ -40,7 +46,7 @@ export async function POST(req: NextRequest) {
       return s.length > 0 ? s : null;
     };
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { data, error } = await supabase
       .from("clients")
       .insert({
@@ -72,7 +78,7 @@ export async function PATCH(req: NextRequest) {
     const name = String(body?.name ?? "").trim();
     if (!id || !name) return NextResponse.json({ ok: false, message: "派遣先名は必須です" }, { status: 400 });
     const clean = (v: unknown) => { const s = String(v ?? "").trim(); return s.length > 0 ? s : null; };
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from("clients").update({
       name,
       workplace_name: clean(body?.workplace_name),
@@ -95,7 +101,7 @@ export async function DELETE(req: NextRequest) {
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
     const id = new URL(req.url).searchParams.get("id");
     if (!id) return NextResponse.json({ ok: false, message: "idが必要です" }, { status: 400 });
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from("clients").delete().eq("id", id).eq("company_id", ctx.companyId);
     if (error) throw error;
     return NextResponse.json({ ok: true });

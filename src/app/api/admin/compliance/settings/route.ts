@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { errorResponse } from "@/lib/api-handler";
 
 // Phase C：会社単位の管理台帳(法37条)記載事項。派遣元責任者・苦情申出先・待遇決定方式。
@@ -9,7 +9,7 @@ export async function GET() {
     const ctx = await getTenantContext();
     if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { data, error } = await supabase
       .from("compliance_settings")
       .select("agency_manager, complaint_contact, wage_method")
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const wm = body?.wage_method;
     const wage_method = wm === "roushi" || wm === "kinto" ? wm : null;
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const { error } = await supabase.from("compliance_settings").upsert(
       {
         company_id: ctx.companyId,

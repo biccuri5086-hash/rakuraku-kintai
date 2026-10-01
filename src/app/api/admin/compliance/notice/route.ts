@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant-context";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getScopedSupabaseClient } from "@/lib/supabase-tenant";
 import { jstToday } from "@/lib/jst";
 import { errorResponse } from "@/lib/api-handler";
 import { officeLimit, individualLimitDate } from "@/lib/compliance/alerts";
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const clientId = new URL(req.url).searchParams.get("client_id");
     if (!clientId) return NextResponse.json({ ok: false, message: "client_id 必須" }, { status: 400 });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getScopedSupabaseClient(ctx.companyId);
     const [{ data: clients, error }, { data: assignments }, { data: staff }, { data: company }] = await Promise.all([
       supabase.from("clients").select("*").eq("company_id", ctx.companyId),
       supabase.from("assignments").select("*").eq("company_id", ctx.companyId),

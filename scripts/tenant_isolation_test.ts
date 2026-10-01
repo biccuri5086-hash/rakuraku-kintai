@@ -18,6 +18,7 @@ const TENANT = new Set([
   "user_profiles", "attendance", "condition_reports", "clients", "assignments", "shifts",
   "timesheets", "timesheet_entries", "payroll_exports", "company_payroll_settings",
   "compliance_acks", "company_subscription", "admin_audit_log",
+  "paid_leave_grants", "paid_leave_takings", "compliance_settings", "tenant_settings",
 ]);
 // セッション未確立でよいルート（認証前）
 const AUTH_EXEMPT = new Set(["login", "logout"]);
