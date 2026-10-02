@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useLiff } from "@/components/LiffProvider";
@@ -38,6 +38,7 @@ export default function HomePage() {
   const [now, setNow] = useState(new Date());
   const [todayRecord, setTodayRecord] = useState<TodayRecord>({ clockIn: null, clockOut: null, stale: false });
   const [loading, setLoading] = useState(false);
+  const clockingRef = useRef(false);
   const [profileChecked, setProfileChecked] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "done">("idle");
   const [tapped, setTapped] = useState(false);
@@ -89,20 +90,28 @@ export default function HomePage() {
   }, [profile, profileChecked, tapped, authedFetch]);
 
   const handleClock = async () => {
-    if (!profile || loading) return;
+    // state の更新は次の描画まで反映されないため、同じ描画内の連打は ref で止める。
+    if (!profile || loading || clockingRef.current) return;
+    clockingRef.current = true;
     const type = todayRecord.clockIn && !todayRecord.clockOut ? "clock_out" : "clock_in";
     setClockError(null);
     setLoading(true);
 
-    const res = await authedFetch("/api/me/clock", {
-      method: "POST",
-      body: JSON.stringify({ type }),
-    });
-    const data = await res.json();
+    let data: { ok?: boolean; message?: string; attendanceId?: string };
+    try {
+      const res = await authedFetch("/api/me/clock", {
+        method: "POST",
+        body: JSON.stringify({ type }),
+      });
+      data = await res.json();
+    } catch {
+      data = { ok: false };
+    }
 
     if (!data.ok) {
       setClockError(data.message ?? "打刻に失敗しました。時間をおいてお試しください");
       setLoading(false);
+      clockingRef.current = false;
       return;
     }
 
@@ -142,6 +151,7 @@ export default function HomePage() {
       }
     }
     setLoading(false);
+    clockingRef.current = false;
   };
 
   const isWorkingNow = !!todayRecord.clockIn && !todayRecord.clockOut;

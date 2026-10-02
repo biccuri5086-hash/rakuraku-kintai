@@ -8,6 +8,13 @@ import { isCompanyBlocked } from "@/lib/tenant-context";
 
 // セッション判定に必要な直近の打刻だけを見る（夜勤の日跨ぎに対応するためカレンダー日では区切らない）。
 const LOOKBACK_HOURS = 72;
+// 同じ種類の打刻がこの秒数以内に重なったら二重送信とみなして拒否する。
+const DUPLICATE_WINDOW_SECONDS = 5;
+
+// PostgREST が「その名前の関数が無い」と返すときのコード（42883 は Postgres 本体のコード）。
+function isMissingFunction(e: { code?: string }): boolean {
+  return e.code === "PGRST202" || e.code === "42883";
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,27 +64,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: decision.message }, { status: decision.status });
     }
 
-    const { data, error } = await supabase
-      .from("attendance")
-      .insert({
-        user_id: user.userId,
-        user_name: user.displayName,
-        type,
-        timestamp: new Date().toISOString(),
-        company_id: profile.company_id,
-      })
-      .select("id")
-      .single();
+    // 同時に2回送られても二重登録されないよう、DB側でスタッフ単位に直列化して登録する（0011）。
+    // 直近 DUPLICATE_WINDOW_SECONDS 秒以内に同種の打刻があれば null が返る。
+    const { data: punchId, error: rpcError } = await supabase.rpc("punch_attendance_once", {
+      p_user_id: user.userId,
+      p_user_name: user.displayName,
+      p_company_id: profile.company_id,
+      p_type: type,
+      p_window_seconds: DUPLICATE_WINDOW_SECONDS,
+    });
 
-    if (error || !data) {
-      return NextResponse.json({ ok: false, message: "打刻に失敗しました" }, { status: 500 });
+    let attendanceId: string | null = punchId ?? null;
+    if (rpcError) {
+      // マイグレーション(0011)の適用前にデプロイされた場合は従来の登録に戻す。
+      // 関数が無いとき以外のエラーは握りつぶさない。
+      if (!isMissingFunction(rpcError)) {
+        return NextResponse.json({ ok: false, message: "打刻に失敗しました" }, { status: 500 });
+      }
+      const { data, error } = await supabase
+        .from("attendance")
+        .insert({
+          user_id: user.userId,
+          user_name: user.displayName,
+          type,
+          timestamp: new Date().toISOString(),
+          company_id: profile.company_id,
+        })
+        .select("id")
+        .single();
+      if (error || !data) {
+        return NextResponse.json({ ok: false, message: "打刻に失敗しました" }, { status: 500 });
+      }
+      attendanceId = data.id;
+    } else if (!attendanceId) {
+      return NextResponse.json(
+        { ok: false, message: "すでに打刻されています。画面を更新して確認してください" },
+        { status: 409 },
+      );
     }
 
     await logAudit(req, "staff_clock", { type, prev_state: state.kind }, {
       actorType: "staff", actorId: user.userId, companyId: profile.company_id,
     });
 
-    return NextResponse.json({ ok: true, attendanceId: data.id });
+    return NextResponse.json({ ok: true, attendanceId });
   } catch (e) {
     return errorResponse(e);
   }
