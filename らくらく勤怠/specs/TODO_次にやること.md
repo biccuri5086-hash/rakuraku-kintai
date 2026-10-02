@@ -33,9 +33,9 @@ Preview環境変数が staging に届いていない（`/api/health` が `projec
    - ※ クォート/スペース禁止・特定ブランチ限定を外す
 2. 🧑 Vercel → Deployments → `staging` の最新Preview → **Redeploy**（環境変数は新ビルドのみ反映）
 3. 🧑 Preview URL の `/api/health` で `project` が `xkrwwrittprbpxlvucuu`・`db: up` を確認
-4. 🧑 `/superadmin` にログイン：`staging@rakuraku.local` / `test2026`（seedは投入済み）
+4. 🧑 `/superadmin` にログイン（ステージング用の運営者アカウントは `scripts/hash-password.mjs` でハッシュを作り、staging DB にだけ登録する。**ID・パスワード・ハッシュ値はこの文書に書かない**）
 5. 🧑 もしログイン画面(Vercel認証)で入れない → Settings → Deployment Protection → Vercel Authentication を Off
-- 参考：seedのSQL・接続情報は本ドキュメント下部と `db/staging-bootstrap.sql`
+- 参考：seedのSQLは `db/staging-bootstrap.sql`（資格情報は含めない）
 
 ## B. 死活監視の仕上げ — ✅ 完了済み（2026-09-09）
 `specs/死活監視・アラート設定手順書.md` の手順に沿って全項目完了。
@@ -80,12 +80,3 @@ STEP0（LINEログイン強制バグ修正）・STEP1（運営者パスワード
 - 派遣法：抵触日アラート(クーリング考慮)・通知書・管理台帳(37条項目)・台帳設定
 - 有給：付与/取得/残高、課金：プラン管理、運営者：会社/管理者管理・2FA・監査ログ
 - 運用：CI(lint/型/テスト/build)・DB自動マイグレーション・/api/health・運用手順書(RUNBOOK)・通し検証(`npm run dogfood`)
-
-## 参考：staging ログインseed（再掲・staging DBにだけ流す）
-```sql
-insert into super_admins (email, password_hash, full_name, is_active)
-values ('staging@rakuraku.local',
-  'scrypt$16384$807bec0429954f748f00851a8536eb16$5b1e51b487ccaca15e1709254240dba09085b1d583409b97470b6f1305de36785036a6d5e6550171f29681aec30ddf421bf41f80a9de2cd4cc5a379c36b12ef8',
-  'ステージング運営者', true)
-on conflict (email) do update set password_hash = excluded.password_hash, is_active = true;
-```
