@@ -50,6 +50,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 npm test        # tsc + 各 selftest（純粋関数のテスト群）
 npm run build   # 本番ビルド
 npx tsc --noEmit
+npm run e2e     # Playwright スモーク（DB不要。要 `npm run build`）。手元は PW_CHROMIUM_PATH でChromiumを指定
 npx eslint      # 0 errors を維持する。warning は既存分あり
 ```
 
