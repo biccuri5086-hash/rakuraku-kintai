@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPassword } from "@/lib/password";
 import { signSuperToken, SUPER_SESSION_COOKIE, SESSION_MAX_AGE, SESSION_MAX_AGE_REMEMBERED } from "@/lib/tenant-session";
-import { checkRateLimit, recordFailure, recordSuccess } from "@/lib/rate-limit";
+import { checkRateLimit, recordFailure, recordSuccess, releaseAttempt } from "@/lib/rate-limit";
 import { verifyTOTP } from "@/lib/totp";
 import { checkPassword } from "@/lib/password-policy";
 import { TRUST_COOKIE, TRUSTED_DEVICE_MAX_AGE, credentialFingerprint, isTrustedDevice, signTrustToken } from "@/lib/trusted-device";
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
+      await releaseAttempt(key);
       return NextResponse.json({ ok: false, message: "不正なリクエスト" }, { status: 400 });
     }
 
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
     const totpCode = body.totp;
     const remember = body.remember !== false; // 既定でこのブラウザを記憶する
     if (!email || !password) {
+      await releaseAttempt(key);
       return NextResponse.json({ ok: false, message: "メールとパスワードを入力してください" }, { status: 400 });
     }
 
@@ -66,6 +68,7 @@ export async function POST(req: NextRequest) {
     // 2FAが有効で、かつこのブラウザが未記憶なら6桁コードを検証
     if (admin.totp_secret && !trusted) {
       if (typeof totpCode !== "string" || !totpCode) {
+        await releaseAttempt(key); // 入力待ちは失敗ではない
         return NextResponse.json(
           { ok: false, message: "認証コード（6桁）を入力してください", code: "TOTP_REQUIRED" },
           { status: 401 }
