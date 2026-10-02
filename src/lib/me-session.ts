@@ -33,7 +33,9 @@ function decode(value: string): LineUser | null {
   } catch {
     return null;
   }
-  if (sig !== expected) return null;
+  const sigBuf = Buffer.from(sig);
+  const expectedBuf = Buffer.from(expected);
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) return null;
   const exp = parseInt(expStr, 10);
   if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return null;
   return { userId, displayName: decodeURIComponent(encodedName) };
