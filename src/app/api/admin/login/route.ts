@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { selectAdmin, MAX_LOGIN_CANDIDATES, type AdminCandidate } from "@/lib/admin-login";
 import { signTenantToken, TENANT_SESSION_COOKIE, SESSION_MAX_AGE, SESSION_MAX_AGE_REMEMBERED } from "@/lib/tenant-session";
-import { checkRateLimit, recordFailure, recordSuccess } from "@/lib/rate-limit";
+import { checkRateLimit, recordFailure, recordSuccess, releaseAttempt } from "@/lib/rate-limit";
 import { verifyTOTP } from "@/lib/totp";
 import { checkPassword } from "@/lib/password-policy";
 import { TRUST_COOKIE, TRUSTED_DEVICE_MAX_AGE, credentialFingerprint, isTrustedDevice, signTrustToken } from "@/lib/trusted-device";
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
+      await releaseAttempt(key);
       return NextResponse.json({ ok: false, message: "不正なリクエスト" }, { status: 400 });
     }
 
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
     const remember = body.remember !== false; // 既定でこのブラウザを記憶する
 
     if (!email || !password) {
+      await releaseAttempt(key);
       return NextResponse.json({ ok: false, message: "メールとパスワードを入力してください" }, { status: 400 });
     }
 
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
       const usable = selection.admins.filter((a) => usableNames.has(a.company_id));
 
       if (usable.length === 0) {
+        await releaseAttempt(key); // パスワードは合っているので失敗には数えない
         await logAudit(req, "admin_login_failure", { email, reason: "company_disabled" });
         return NextResponse.json(
           { ok: false, message: "この会社のサービスは現在ご利用いただけません" },
@@ -88,6 +91,7 @@ export async function POST(req: NextRequest) {
         );
       }
       if (usable.length > 1) {
+        await releaseAttempt(key); // パスワードは合っているので失敗には数えない
         await logAudit(req, "admin_login_company_select", { email, count: usable.length });
         return NextResponse.json(
           {
@@ -104,6 +108,7 @@ export async function POST(req: NextRequest) {
 
     const blockReason = await companyBlockReason(admin.company_id);
     if (blockReason) {
+      await releaseAttempt(key); // パスワードは合っているので失敗には数えない
       await logAudit(req, "admin_login_failure", { email, reason: blockReason === "trial_ended" ? "trial_ended" : "company_disabled" }, {
         actorType: "admin", actorId: admin.id, companyId: admin.company_id,
       });
@@ -125,6 +130,7 @@ export async function POST(req: NextRequest) {
 
     if (admin.totp_secret && !trusted) {
       if (typeof totpCode !== "string" || !totpCode) {
+        await releaseAttempt(key); // 入力待ちは失敗ではない
         return NextResponse.json(
           { ok: false, message: "認証コード（6桁）を入力してください", code: "TOTP_REQUIRED" },
           { status: 401 }
