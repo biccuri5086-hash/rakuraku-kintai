@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "migrate": "node scripts/migrate.mjs",
     "dogfood": "tsc -p tsconfig.test.json && node --use-system-ca .test-build/scripts/dogfood_test.js",
-    "test": "tsc -p tsconfig.test.json && node .test-build/scripts/attendance_session_selftest.js && node .test-build/scripts/admin_login_selftest.js && node .test-build/scripts/generate_password_selftest.js && node .test-build/scripts/totp_selftest.js && node .test-build/scripts/password_policy_selftest.js && node .test-build/scripts/trusted_device_selftest.js && node .test-build/scripts/session_selftest.js && node .test-build/scripts/payroll_selftest.js && node .test-build/scripts/compliance_selftest.js && node .test-build/scripts/billing_selftest.js && node .test-build/scripts/trial_notice_selftest.js && node .test-build/scripts/paid_leave_selftest.js && node .test-build/scripts/security_guard_selftest.js && node .test-build/scripts/tenant_jwt_selftest.js && node .test-build/scripts/anomaly_detection_selftest.js && node .test-build/scripts/tenant_isolation_test.js"
+    "test": "tsc -p tsconfig.test.json && node .test-build/scripts/attendance_session_selftest.js && node .test-build/scripts/admin_login_selftest.js && node .test-build/scripts/generate_password_selftest.js && node .test-build/scripts/totp_selftest.js && node .test-build/scripts/password_policy_selftest.js && node .test-build/scripts/trusted_device_selftest.js && node .test-build/scripts/session_selftest.js && node .test-build/scripts/payroll_selftest.js && node .test-build/scripts/compliance_selftest.js && node .test-build/scripts/billing_selftest.js && node .test-build/scripts/trial_notice_selftest.js && node .test-build/scripts/paid_leave_selftest.js && node .test-build/scripts/security_guard_selftest.js && node .test-build/scripts/tenant_jwt_selftest.js && node .test-build/scripts/anomaly_detection_selftest.js && node .test-build/scripts/tenant_isolation_test.js",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@line/liff": "^2.28.0",
@@ -23,6 +24,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",

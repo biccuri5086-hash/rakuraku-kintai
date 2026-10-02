@@ -28,3 +28,22 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: placeholder_service_role_key_for_ci_only
           SESSION_SECRET: ci_placeholder_session_secret_1234567890
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: placeholder_service_role_key_for_ci_only
+          SESSION_SECRET: ci_placeholder_session_secret_1234567890
+      - run: npx playwright install --with-deps chromium
+      - name: E2E smoke (DB 不要の範囲)
+        run: npm run e2e
