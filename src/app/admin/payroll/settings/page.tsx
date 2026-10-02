@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, LogOut, Save, ArrowLeft, Info } from "lucide-react";
+import { LogOut, Save, ArrowLeft, Info } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
 
 const DOW = ["日", "月", "火", "水", "木", "金", "土"];

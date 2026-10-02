@@ -65,7 +65,10 @@ export default function ClientReportPage() {
 
   const downloadCsv = (clientId: string | null) => {
     const q = clientId ? `&client_id=${encodeURIComponent(clientId)}` : "";
-    window.location.href = `/api/admin/payroll/client-report?month=${month}&format=csv${q}`;
+    const a = document.createElement("a");
+    a.href = `/api/admin/payroll/client-report?month=${month}&format=csv${q}`;
+    a.download = "";
+    a.click();
   };
 
   if (!authed) {

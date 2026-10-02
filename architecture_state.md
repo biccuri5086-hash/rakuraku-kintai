@@ -1,6 +1,6 @@
 # architecture_state.md — 既存実装インデックス
 
-最終更新: 2026年9月6日
+最終更新: 2026年10月2日（打刻の二重登録防止・ログイン試行のアトミック化・Playwrightスモークを反映）
 
 > **これは何のためのファイルか**：新しい機能追加・改修を依頼する前に、必ずこのファイルを確認する。
 > 「既に実装されている仕組みを知らずに、AIが重複実装してしまう」事故（Sentry/死活監視を
@@ -22,7 +22,7 @@
 | 2FA | 独自実装（TOTP、`src/lib/totp.ts`、`qrcode`でQR生成） | シークレットはサーバー内生成、外部送信なし |
 | DB接続（マイグレーション用） | `pg`（devDependency） | `scripts/migrate.mjs`専用、アプリ本体は`@supabase/supabase-js`のみ使用 |
 | スタイリング | Tailwind CSS v4 | |
-| CI | GitHub Actions | `ci.yml`（lint/typecheck/test/build）／`migrate.yml`（DB自動適用）／`health-check.yml`（死活監視） |
+| CI | GitHub Actions | `ci.yml`（lint/typecheck/test/build に加え、DB不要のPlaywrightスモーク `e2e/` を実行）／`migrate.yml`（DB自動適用）／`health-check.yml`（死活監視） |
 
 **外部の重量級フレームワーク（認証SaaS、ORM等）は意図的に使っていない。** 認証・暗号化はすべて
 `src/lib/`内の独自実装（scrypt/HMAC/AES-GCM等のNode標準crypto利用）。新機能でこの方針を変える

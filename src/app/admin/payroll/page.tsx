@@ -147,7 +147,10 @@ export default function PayrollPage() {
   };
 
   const downloadCsv = () => {
-    window.location.href = `/api/admin/payroll/preview?month=${month}&format=csv`;
+    const a = document.createElement("a");
+    a.href = `/api/admin/payroll/preview?month=${month}&format=csv`;
+    a.download = "";
+    a.click();
   };
 
   if (!authed) {
