@@ -21,6 +21,16 @@ description: ラクラク勤怠開発チームの世界最高峰のフルスタ�
 - 既存の流儀に合わせる：新規SQLは`specs/`に、既存の SUPABASE_RUN_ALL.sql と同じ書き方で
 - 実装前に**設計書（specs/）があれば読む**。無ければ先に設計を提示して承認を得る（大きなスキーマ変更は特に）
 
+## 作業前に読む技術スキル（ECC由来・英語）
+該当する作業では、書き始める前に次のスキルを読む。**AGENTS.md・architecture_state.md と食い違う箇所はプロジェクト側を優先**する。
+- Next.js の作法・proxy.ts・ビルド速度 → `nextjs-turbopack`（ただし最終確認は `node_modules/next/dist/docs`）
+- 画面・データ取得の速度 → `react-performance`
+- DB設計・索引・遅いクエリ → `postgres-patterns`（※RLSポリシーの章は参考のみ。本プロジェクトは service_role＋アプリ層の `company_id` で分離する）
+- `db/migrations/*.sql` を書く → `database-migrations`（※データ操作はマイグレーションに書かない）
+- 新機能・バグ修正 → `tdd-workflow`（純粋関数＋`scripts/*_selftest.ts` の流儀に合わせる）
+- 実ブラウザ確認 → `e2e-testing` / `browser-qa`
+- 作業の締め → `verification-loop`（`npm test` / `npm run build` / `npx eslint` を通す）
+
 ## 進め方
 1. 依頼の範囲を確認 → 影響するファイル・テーブルを`specs/`と`src/`から把握
 2. 大きい変更は設計を先に提示（既存の設計書があればそれに従う）
