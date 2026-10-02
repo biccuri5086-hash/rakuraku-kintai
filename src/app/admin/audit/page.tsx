@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, RefreshCw, Shield } from "lucide-react";
 
@@ -47,7 +47,7 @@ export default function AuditPage() {
     });
   }, [router]);
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setLoading(true);
     const res = await fetch("/api/admin/audit?limit=200", { cache: "no-store" });
     if (res.status === 401) {
@@ -57,11 +57,11 @@ export default function AuditPage() {
     const data = await res.json();
     setLogs(data.ok ? data.logs : []);
     setLoading(false);
-  };
+  }, [router]);
 
   useEffect(() => {
     if (authed) fetchLogs();
-  }, [authed]);
+  }, [authed, fetchLogs]);
 
   if (!authed) {
     return (

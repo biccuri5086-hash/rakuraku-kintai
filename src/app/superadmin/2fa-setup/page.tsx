@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Shield, Copy, CheckCircle, AlertTriangle, KeyRound } from "lucide-react";
 
@@ -28,7 +28,7 @@ export default function SuperSetup2FAPage() {
     });
   }, [router]);
 
-  const fetchSetup = async () => {
+  const fetchSetup = useCallback(async () => {
     setLoading(true);
     const res = await fetch("/api/superadmin/2fa-setup", { cache: "no-store" });
     if (res.status === 401) {
@@ -42,11 +42,11 @@ export default function SuperSetup2FAPage() {
       setQrDataUrl(data.qrDataUrl ?? "");
     }
     setLoading(false);
-  };
+  }, [router]);
 
   useEffect(() => {
     if (authed) fetchSetup();
-  }, [authed]);
+  }, [authed, fetchSetup]);
 
   const handleCopy = async (text: string) => {
     try {

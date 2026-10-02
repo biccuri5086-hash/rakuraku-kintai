@@ -15,7 +15,7 @@ description: ラクラク勤怠開発チームの世界最高峰のフルスタ�
 - 既存スキーマは `らくらく勤怠/specs/` に集約（DB_SCHEMA.sql / MULTITENANT_MIGRATION.sql 等）
 
 ## 掟（必ず守る）
-- **セキュリティ最優先**：全テーブルにRLSを`company_id`でスコープ。個人情報（電話・GPS・勤怠）は暗号化方針を踏襲（電話番号暗号化は実装済み）。RLSポリシー無しのテーブルを作らない
+- **セキュリティ最優先**：全テーブルRLS有効・anon向けポリシー0件で、アクセスは service_role のみ。**テナント分離はアプリ層の責任**で、各APIが `company_id`（セッション由来）で絞る（`scripts/tenant_isolation_test.ts` が検査）。個人情報（電話・GPS・勤怠）は暗号化方針を踏襲（電話番号暗号化は実装済み）。新しいテナントのテーブルは `company_id` を持たせ RLS を有効にする
 - **マイグレーションは非破壊**：`create table if not exists` / `add column if not exists`。既存の打刻データと単発運用を壊さない
 - **`git add -A` / `git add .` は絶対禁止**：このリポジトリのgitルートには認証情報が同居。必ず**明示パス指定**でadd。commit/pushはユーザーが求めた時だけ、mainなら別ブランチを検討
 - 既存の流儀に合わせる：新規SQLは`specs/`に、既存の SUPABASE_RUN_ALL.sql と同じ書き方で

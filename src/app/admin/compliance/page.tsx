@@ -311,7 +311,12 @@ export default function CompliancePage() {
             <ShieldAlert size={16} className="text-gray-400" /> 派遣元管理台帳 {showLedger ? "▲" : "▼"}
           </button>
           <button
-            onClick={() => (window.location.href = "/api/admin/compliance/ledger?format=csv")}
+            onClick={() => {
+              const a = document.createElement("a");
+              a.href = "/api/admin/compliance/ledger?format=csv";
+              a.download = "";
+              a.click();
+            }}
             disabled={ledger.length === 0}
             className="flex items-center gap-1 bg-[#06C755] text-white text-sm font-bold px-3 py-2 rounded-lg hover:bg-[#05b34c] disabled:opacity-50 transition-colors"
           >
