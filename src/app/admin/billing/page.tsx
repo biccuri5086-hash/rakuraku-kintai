@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, LogOut, Check, Users, Info } from "lucide-react";
 import AdminNav from "@/components/AdminNav";
+import TrialNoticeBanner from "@/components/TrialNoticeBanner";
 
 type PlanId = "trial" | "free" | "starter" | "standard" | "enterprise";
 type PlanView = {
@@ -11,7 +12,7 @@ type PlanView = {
 };
 type Sub = { plan: PlanId; status: "trial" | "active" | "free"; trialEndsOn: string | null };
 
-const STATUS_LABEL: Record<Sub["status"], string> = { trial: "トライアル中", active: "契約中", free: "無料プラン" };
+const STATUS_LABEL: Record<Sub["status"], string> = { trial: "トライアル中", active: "契約中", free: "旧無料プラン" };
 
 export default function BillingPage() {
   const router = useRouter();
@@ -88,6 +89,7 @@ export default function BillingPage() {
       <AdminNav />
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+        <TrialNoticeBanner />
         <h2 className="font-bold text-gray-700 flex items-center gap-2">
           <CreditCard size={18} className="text-[#06C755]" /> 現在のプラン
         </h2>
@@ -126,7 +128,7 @@ export default function BillingPage() {
 
             <h3 className="font-bold text-gray-700 text-sm pt-1">プランを選ぶ</h3>
             <div className="grid sm:grid-cols-2 gap-3">
-              {plans.filter((p) => p.id !== "trial").map((p) => {
+              {plans.filter((p) => p.id !== "trial" && p.id !== "free").map((p) => {
                 const current = p.id === sub.plan;
                 return (
                   <div key={p.id} className={`bg-white rounded-2xl shadow p-4 flex flex-col ${current ? "ring-2 ring-[#06C755]" : ""}`}>
@@ -162,7 +164,7 @@ export default function BillingPage() {
               <Info size={14} className="flex-shrink-0 mt-0.5 text-gray-400" />
               <div className="space-y-1">
                 <p>料金は登録スタッフ数×単価の概算です（前月末の登録数で翌月分を請求）。月単位契約・違約金なし。</p>
-                <p>トライアルは30日・全機能。終了後は無料プラン（打刻のみ）へ移行します。</p>
+                <p>トライアルは30日・全機能。終了後は有料プランへの切替が必要です。</p>
                 <p>※ 実際の決済（カード・請求書）連携は本画面では未対応です。プラン状態の管理のみ行います。</p>
               </div>
             </div>

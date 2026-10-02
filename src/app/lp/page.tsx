@@ -76,7 +76,7 @@ export default function LpPage() {
         </div>
         <div className="mt-4 bg-green-50 rounded-xl p-4 text-center border border-green-200">
           <p className="font-bold text-[#06C755]">🎁 30日間・全機能・無料トライアル</p>
-          <p className="text-xs text-gray-500 mt-1">クレジットカード不要・違約金なし</p>
+          <p className="text-xs text-gray-500 mt-1">クレジットカード不要・違約金なし・トライアル後は有料プランへ</p>
         </div>
       </div>
 

@@ -18,12 +18,12 @@ export const PLANS: Plan[] = [
   {
     id: "trial", name: "無料トライアル", unitPrice: 0, maxStaff: null,
     features: ["全機能", "スタッフ数無制限", "30日間"],
-    note: "契約・カード登録不要。期間終了後は無料プラン（打刻のみ）へ移行。",
+    note: "契約・カード登録不要。期間終了後は有料プランへの切替が必要です（自動で無料にはなりません）。",
   },
   {
-    id: "free", name: "無料プラン", unitPrice: 0, maxStaff: null,
+    id: "free", name: "旧無料プラン（新規受付終了）", unitPrice: 0, maxStaff: null,
     features: ["1タップ打刻", "GPS打刻記録"],
-    note: "トライアル終了後の既定。打刻機能のみ継続。",
+    note: "既存契約の表示用。新規には選べません（無料の恒久プランは提供しない方針）。",
   },
   {
     id: "starter", name: "スタータープラン", unitPrice: 150, maxStaff: null,
@@ -43,6 +43,12 @@ export const PLANS: Plan[] = [
 
 export function getPlan(id: PlanId): Plan {
   return PLANS.find((p) => p.id === id) ?? PLANS[0];
+}
+
+// 画面・APIから新規に選べるのは有料プランのみ。
+// trial（再取得による無限トライアル）と free（恒久無料）は選択不可。
+export function isSelectablePlan(v: unknown): v is PlanId {
+  return isPlanId(v) && v !== "trial" && v !== "free";
 }
 
 export function isPlanId(v: unknown): v is PlanId {

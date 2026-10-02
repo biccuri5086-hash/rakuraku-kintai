@@ -75,6 +75,7 @@ scripts/            # selftest群(npm testで実行)・migrate.mjs・dogfood_tes
 | `compliance_acks` / `compliance_settings` | 派遣法コンプライアンス（抵触日・管理台帳） |
 | `paid_leave_grants` / `paid_leave_takings` | 有給 |
 | `company_subscription` | プラン管理（**決済の自動化は未実装**。手動でプラン選択するだけ） |
+| `companies.trial_decision` | トライアル終了7日前からの「続ける/やめる」選択(0010)。自動停止は`isCompanyBlocked`(`companyBlockReason`)で判定：`stop`は終了日に、未選択/`continue`で未契約なら終了日+7日(GRACE_DAYS)後に停止。契約済み(company_subscription.status=active)は止めない。判定は`src/lib/billing/trial-notice.ts`、画面は`TrialNoticeBanner`、API `/api/admin/trial-notice` |
 | `admin_audit_log` | 監査ログ。`company_id`は`on delete set null`（会社削除後も履歴は残す設計） |
 | `rate_limits` | ログイン試行のレート制限（IPベース、`service_role_only`ポリシー） |
 

@@ -1,5 +1,5 @@
 // Phase D 課金ロジックの自己テスト。
-import { estimateMonthly, getPlan, isPlanId, rowToSubscription, statusForPlan } from "../src/lib/billing/plans";
+import { estimateMonthly, getPlan, isPlanId, isSelectablePlan, rowToSubscription, statusForPlan } from "../src/lib/billing/plans";
 
 let failed = 0;
 function eq(name: string, got: unknown, want: unknown) {
@@ -14,6 +14,11 @@ eq("enterprise = 見積(null)", estimateMonthly("enterprise", 100), null);
 eq("free = 0", estimateMonthly("free", 30), 0);
 eq("getPlan standard name", getPlan("standard").name, "スタンダードプラン");
 eq("isPlanId ok", isPlanId("starter"), true);
+eq("selectable starter", isSelectablePlan("starter"), true);
+eq("selectable enterprise", isSelectablePlan("enterprise"), true);
+eq("free は選べない", isSelectablePlan("free"), false);
+eq("trial は選べない", isSelectablePlan("trial"), false);
+eq("legacy free 行は表示できる", rowToSubscription({ plan: "free", status: "free" }).plan, "free");
 eq("isPlanId ng", isPlanId("gold"), false);
 eq("statusForPlan free", statusForPlan("free"), "free");
 eq("statusForPlan standard", statusForPlan("standard"), "active");
